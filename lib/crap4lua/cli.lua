@@ -9,12 +9,23 @@ local function _text(zh, en)
   return common.bilingual(zh, en)
 end
 
+local function _print_migration_notice()
+  io.stderr:write("[crap] NOTE: The Lua CLI is deprecated. Use `crap4lua-go` instead:\n")
+  io.stderr:write("[crap]   ./bin/crap4lua-go report --config <file> ...\n")
+  io.stderr:write("[crap]   ./bin/crap4lua-go viewer --in-json <file> ...\n")
+  io.stderr:write("[crap] See docs/migration.md for details.\n\n")
+end
+
 local function _usage(command_name)
   local command = tostring(command_name or "bin/crap4lua.lua")
   io.write(_text("用法", "Usage") .. ":\n")
   io.write("  <lua> " .. command .. " report [--config <file>] [--mode <name>] [--lane <name>] [--out <file>] [--top <n>] [--strict-tests] [--project-root <dir>]\n")
   io.write("  <lua> " .. command .. " viewer [--config <file>] [--out-dir <dir>] [--in-json <file>] [--open]\n")
   io.write("  <lua> " .. command .. " --help\n")
+  io.write("\n")
+  io.write("NOTE: The Lua CLI is deprecated. Please migrate to `crap4lua-go`.\n")
+  io.write("  ./bin/crap4lua-go report --config <file> ...\n")
+  io.write("  See docs/migration.md\n")
 end
 
 local function _parse_top(value)
@@ -190,6 +201,7 @@ end
 
 function cli.run(args, env)
   env = env or {}
+  _print_migration_notice()
   local options = _parse_args(args or {})
   if options.command == "--help" or options.command == "-h" then
     _usage(env.command_name)

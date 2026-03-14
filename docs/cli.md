@@ -2,37 +2,62 @@
 
 ## User-facing commands
 
-### Lua wrapper
+### Go CLI (Recommended)
+
+The Go CLI is the primary entry point for `crap4lua`:
+
+```sh
+# Config-driven report generation
+./bin/crap4lua-go report --config <file> [--lane <name>] [--mode <name>] [--top <n>] [--strict-tests] [--project-root <dir>] [--response-json <file>]
+
+# Low-level JSON mode (for integration)
+./bin/crap4lua-go report --request-json <file> --response-json <file>
+
+# Bridge collection (debug/inspection)
+./bin/crap4lua-go collect --config <file> --out <json> [--lane <name>] [--mode <name>]
+
+# Viewer generation
+./bin/crap4lua-go viewer --in-json <file> --out-dir <dir> [--open]
+```
+
+### Lua wrapper (Compatibility)
+
+The Lua wrapper is maintained for backward compatibility. It forwards to the Go engine:
 
 ```sh
 lua bin/crap4lua.lua report --config <file> [--lane <name>] [--mode <name>] [--out <file>] [--top <n>] [--strict-tests] [--project-root <dir>]
 lua bin/crap4lua.lua viewer [--config <file>] [--in-json <file>] [--out-dir <dir>] [--open]
 ```
 
-The Lua wrapper loads config, runs host coverage adapters when needed, then delegates
-static analysis and viewer export to the Go engine.
+Note: The Lua wrapper will print a deprecation notice in future versions. Migrate to `crap4lua-go`.
 
-### Go engine
+The Go CLI is the canonical implementation for:
 
-```sh
-./bin/crap4lua-go report --request-json <file> --response-json <file>
-./bin/crap4lua-go viewer --in-json <file> --out-dir <dir> [--open]
-```
-
-The Go engine is the canonical implementation for:
-
-- source scanning
+- CLI parsing and orchestration
+- Source scanning
 - `luac -p -l` parsing
 - CRAP calculation and report JSON generation
-- viewer bundle export
+- Viewer bundle export
 
-## Engine resolution
+## Architecture
 
-The Lua wrapper resolves the Go binary in this order:
-
-1. `CRAP4LUA_GO_BIN`
-2. `bin/crap4lua-go`
-3. `go build -o bin/crap4lua-go ./cmd/crap4lua-go`
+```
+┌─────────────────────────────────────────────────────────┐
+│  Go CLI (cmd/crap4lua-go)                                │
+│  - report --config ...                                   │
+│  - collect --config ...                                  │
+│  - viewer --in-json ...                                  │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────────────────┐
+│  Lua Bridge (lib/crap4lua/bridge.lua)                    │
+│  - Execute crap4lua.config.lua                           │
+│  - Load host adapter                                     │
+│  - Collect coverage via debug.sethook                    │
+│  - Return JSON to Go                                     │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Config contract
 

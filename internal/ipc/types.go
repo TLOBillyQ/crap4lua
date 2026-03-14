@@ -5,6 +5,20 @@ import (
 	"os"
 )
 
+type BridgeCollectRequest struct {
+	ConfigPath  string   `json:"config_path"`
+	Lanes       []string `json:"lanes,omitempty"`
+	Mode        string   `json:"mode,omitempty"`
+	ProjectRoot string   `json:"project_root,omitempty"`
+}
+
+type BridgeCollectResponse struct {
+	ProjectRoot    string         `json:"project_root"`
+	ProjectName    string         `json:"project_name"`
+	SourceRoots    []string       `json:"source_roots"`
+	CoverageResult CoverageResult `json:"coverage_result"`
+}
+
 type CoverageResult struct {
 	LineHits LineHits     `json:"line_hits"`
 	Lanes    []LaneResult `json:"lanes"`

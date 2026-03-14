@@ -1,20 +1,86 @@
 # crap4lua
 
-`crap4lua` is a standalone Lua toolchain for computing CRAP hotspots from `luac`
-complexity listings plus injected dynamic coverage data.
+`crap4lua` is a CRAP (Change Risk Anti-Patterns) analysis tool for Lua code.
+It computes CRAP hotspots from `luac` complexity listings plus dynamic coverage data.
 
-The project is now split into two layers:
+## Architecture
 
-- `cmd/crap4lua-go/` + `internal/...` - the Go performance engine
-- `lib/crap4lua/` - Lua config, coverage, and compatibility wrappers
-- `bin/crap4lua.lua` - Lua CLI entrypoint
-- `examples/basic/` - runnable example config + adapter
-- `docs/` - CLI, embedding, and migration notes
+**Go-first architecture**: The core implementation is in Go, with Lua serving as the bridge runtime.
 
-## Host boundary
+```
+┌─────────────────────────────────────────────────────────┐
+│  Go CLI (cmd/crap4lua-go)                                │
+│  - report --config ...                                   │
+│  - collect --config ...                                  │
+│  - viewer --in-json ...                                  │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────────────────┐
+│  Lua Bridge (lib/crap4lua/bridge.lua)                    │
+│  - Execute crap4lua.config.lua                           │
+│  - Load host adapter                                     │
+│  - Collect coverage via debug.sethook                    │
+│  - Return JSON to Go                                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+**What Go does:**
+- CLI parsing and orchestration
+- Source scanning
+- `luac -p -l` parsing
+- CRAP calculation
+- Report generation
+- Viewer bundle export
+
+**What Lua does (and must do):**
+- Evaluate `crap4lua.config.lua`
+- Load and run host adapters
+- Collect line hits via `debug.sethook`
+
+## Quick Start
+
+```sh
+# Build the Go CLI
+make build-go
+
+# Run analysis
+./bin/crap4lua-go report --config examples/basic/crap4lua.config.lua
+
+# Generate viewer
+./bin/crap4lua-go report --config examples/basic/crap4lua.config.lua --response-json report.json
+./bin/crap4lua-go viewer --in-json report.json --out-dir viewer --open
+```
+
+## CLI Commands
+
+### report
+Config-driven report generation (recommended):
+```sh
+./bin/crap4lua-go report --config <file> [--lane <name>] [--mode <name>] [--top <n>] [--strict-tests] [--project-root <dir>] [--response-json <file>]
+```
+
+Low-level JSON mode (for integration):
+```sh
+./bin/crap4lua-go report --request-json <file> --response-json <file>
+```
+
+### collect
+Bridge collection for debug/inspection:
+```sh
+./bin/crap4lua-go collect --config <file> --out <json> [--lane <name>] [--mode <name>]
+```
+
+### viewer
+Generate viewer bundle:
+```sh
+./bin/crap4lua-go viewer --in-json <file> --out-dir <dir> [--open]
+```
+
+## Host Adapter
 
 `crap4lua` does not know how a host project discovers or executes tests.
-Hosts integrate through a single adapter object:
+Hosts integrate through a Lua adapter:
 
 ```lua
 {
@@ -24,35 +90,9 @@ Hosts integrate through a single adapter object:
 }
 ```
 
-The Lua layer still collects runtime coverage. The Go layer owns source scanning,
-`luac` parsing, CRAP calculation, report assembly, and viewer bundle export.
+See `examples/basic/adapter.lua` for a complete example.
 
-## CLI
-
-Lua compatibility entrypoint:
-
-```sh
-lua bin/crap4lua.lua report --config examples/basic/crap4lua.config.lua --out tmp/report.json
-lua bin/crap4lua.lua viewer --in-json tmp/report.json --out-dir tmp/crap_view --open
-```
-
-Go-native entrypoint:
-
-```sh
-make build-go
-./bin/crap4lua-go report --request-json /tmp/request.json --response-json /tmp/response.json
-./bin/crap4lua-go viewer --in-json /tmp/response.json --out-dir /tmp/crap_view
-```
-
-The Lua wrapper resolves the Go engine in this order:
-
-1. `CRAP4LUA_GO_BIN`
-2. `bin/crap4lua-go`
-3. local `go build -o bin/crap4lua-go ./cmd/crap4lua-go`
-
-If none of those succeed, the wrapper fails with a build hint.
-
-## Config shape
+## Config Format
 
 `crap4lua.config.lua` returns a Lua table:
 
@@ -68,6 +108,14 @@ return {
   },
 }
 ```
+
+## Lua Compatibility
+
+The Lua CLI (`lua bin/crap4lua.lua`) is maintained for backward compatibility but shows a deprecation notice. It forwards all commands to the Go engine.
+
+**Recommended**: Use `./bin/crap4lua-go` directly.
+
+See [docs/migration.md](docs/migration.md) for migration details.
 
 ## Tests
 
