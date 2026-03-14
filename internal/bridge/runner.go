@@ -36,7 +36,7 @@ type RunCollectOptions struct {
 	// LuaBinary optionally sets lua executable path/name (e.g. "lua", "lua5.4").
 	LuaBinary string
 
-	// RepoRoot optionally sets repository root containing bin/crap4lua.lua.
+	// RepoRoot optionally sets repository root containing scripts/crap4lua-bridge.lua.
 	// If empty, current working directory is used.
 	RepoRoot string
 }
@@ -57,7 +57,7 @@ func New(luaBinary, repoRoot string) *Runner {
 
 // Collect executes:
 //
-//	lua bin/crap4lua.lua collect --config <file> [--lane ...] [--mode ...] [--project-root ...]
+//	lua scripts/crap4lua-bridge.lua collect --config <file> [--lane ...] [--mode ...] [--project-root ...]
 //
 // and parses the JSON output into BridgeCollectResponse.
 func (r *Runner) Collect(opts RunCollectOptions) (ipc.BridgeCollectResponse, error) {
@@ -82,7 +82,7 @@ func (r *Runner) Collect(opts RunCollectOptions) (ipc.BridgeCollectResponse, err
 	}
 	repoRoot, _ = filepath.Abs(repoRoot)
 
-	bridgeEntry := filepath.Join(repoRoot, "bin", "crap4lua.lua")
+	bridgeEntry := filepath.Join(repoRoot, "scripts", "crap4lua-bridge.lua")
 	if _, err := os.Stat(bridgeEntry); err != nil {
 		return zero, fmt.Errorf("bridge entry not found: %s: %w", bridgeEntry, err)
 	}

@@ -1,96 +1,90 @@
 # crap4lua
 
-`crap4lua` is a CRAP (Change Risk Anti-Patterns) analysis tool for Lua code.
-It computes CRAP hotspots from `luac` complexity listings plus dynamic coverage data.
+`crap4lua` is a CRAP (Change Risk Anti-Patterns) hotspot analyzer for Lua code.
+It uses a Go CLI for product workflows and a small Lua runtime bridge for config loading, host adapter execution, and coverage capture.
 
 ## Architecture
 
-**Go-first architecture**: The core implementation is in Go, with Lua serving as the bridge runtime.
-
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Go CLI (cmd/crap4lua-go)                                │
-│  - report --config ...                                   │
-│  - collect --config ...                                  │
-│  - viewer --in-json ...                                  │
+│  Go CLI (cmd/crap4lua)                                 │
+│  - report --config ...                                 │
+│  - collect --config ...                                │
+│  - viewer --in-json ...                                │
 └──────────────────┬──────────────────────────────────────┘
                    │
                    ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Lua Bridge (lib/crap4lua/bridge.lua)                    │
-│  - Execute crap4lua.config.lua                           │
-│  - Load host adapter                                     │
-│  - Collect coverage via debug.sethook                    │
-│  - Return JSON to Go                                     │
+│  Lua Bridge Runtime                                     │
+│  - Execute crap4lua.config.lua                          │
+│  - Load host adapter                                    │
+│  - Collect coverage via debug.sethook                   │
+│  - Return JSON to Go                                    │
 └─────────────────────────────────────────────────────────┘
 ```
-
-**What Go does:**
-- CLI parsing and orchestration
-- Source scanning
-- `luac -p -l` parsing
-- CRAP calculation
-- Report generation
-- Viewer bundle export
-
-**What Lua does (and must do):**
-- Evaluate `crap4lua.config.lua`
-- Load and run host adapters
-- Collect line hits via `debug.sethook`
 
 ## Quick Start
 
 ```sh
-# Build the Go CLI
-make build-go
-
-# Run analysis
-./bin/crap4lua-go report --config examples/basic/crap4lua.config.lua
-
-# Generate viewer
-./bin/crap4lua-go report --config examples/basic/crap4lua.config.lua --response-json report.json
-./bin/crap4lua-go viewer --in-json report.json --out-dir viewer --open
+make build
+./bin/crap4lua report --config examples/basic/crap4lua.config.lua
+./bin/crap4lua report --config examples/basic/crap4lua.config.lua --response-json report.json
+./bin/crap4lua viewer --in-json report.json --out-dir viewer --open
 ```
 
 ## CLI Commands
 
 ### report
-Config-driven report generation (recommended):
+Config-driven report generation:
 ```sh
-./bin/crap4lua-go report --config <file> [--lane <name>] [--mode <name>] [--top <n>] [--strict-tests] [--project-root <dir>] [--response-json <file>]
+./bin/crap4lua report --config <file> [--lane <name>] [--mode <name>] [--top <n>] [--strict-tests] [--project-root <dir>] [--response-json <file>]
 ```
 
-Low-level JSON mode (for integration):
+Low-level JSON mode:
 ```sh
-./bin/crap4lua-go report --request-json <file> --response-json <file>
+./bin/crap4lua report --request-json <file> --response-json <file>
 ```
 
 ### collect
-Bridge collection for debug/inspection:
+Bridge collection for debugging or inspection:
 ```sh
-./bin/crap4lua-go collect --config <file> --out <json> [--lane <name>] [--mode <name>]
+./bin/crap4lua collect --config <file> --out <json> [--lane <name>] [--mode <name>] [--project-root <dir>]
 ```
 
 ### viewer
-Generate viewer bundle:
+Generate a standalone viewer bundle:
 ```sh
-./bin/crap4lua-go viewer --in-json <file> --out-dir <dir> [--open]
+./bin/crap4lua viewer --in-json <file> --out-dir <dir> [--open]
 ```
 
-## Host Adapter
+## Public Surfaces
 
-`crap4lua` does not know how a host project discovers or executes tests.
-Hosts integrate through a Lua adapter:
+### Official product surface
+- CLI: `crap4lua report`, `crap4lua collect`, `crap4lua viewer`
+- Lua bridge API: `require("crap4lua.bridge")`
+- Lua runtime helpers: `require("crap4lua.config")`, `require("crap4lua.coverage")`
+
+### Host adapter contract
+`crap4lua` does not discover or run host tests by itself. Hosts provide a Lua adapter:
 
 ```lua
-{
-  resolve_suites = function(lane, mode) ... end,
-  run = function(suites, opts) ... end,
-  debug_api = debug, -- optional
+return {
+  resolve_suites = function(lane, mode)
+    return {
+      {
+        name = lane,
+        tests = {
+          { name = "example", run = function() end },
+        },
+      },
+    }, mode
+  end,
+  run = function(suites, opts)
+    return { total = 0, failed = false, failures = {} }
+  end,
+  debug_api = debug,
 }
 ```
-
-See `examples/basic/adapter.lua` for a complete example.
 
 ## Config Format
 
@@ -109,13 +103,9 @@ return {
 }
 ```
 
-## Lua Compatibility
+## Packaging
 
-The Lua CLI (`lua bin/crap4lua.lua`) is maintained for backward compatibility but shows a deprecation notice. It forwards all commands to the Go engine.
-
-**Recommended**: Use `./bin/crap4lua-go` directly.
-
-See [docs/migration.md](docs/migration.md) for migration details.
+The repository includes a LuaRocks spec for the Lua bridge runtime. It installs the bridge/config/coverage modules plus their private runtime helpers; the full product workflow stays in the Go CLI.
 
 ## Tests
 
@@ -123,7 +113,3 @@ See [docs/migration.md](docs/migration.md) for migration details.
 make test-go
 make test-lua
 ```
-
-## Packaging
-
-A LuaRocks spec is included as `/Users/billyq/Dev/Github/Lua/crap4lua/crap4lua-dev-1.rockspec`.

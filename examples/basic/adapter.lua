@@ -1,16 +1,35 @@
-local common = require("crap4lua.common")
+local function normalize_path(path)
+  return tostring(path or ""):gsub("\\", "/")
+end
 
-local function _adapter_root()
+local function parent_dir(path)
+  local normalized = normalize_path(path)
+  return normalized:match("^(.*)/[^/]+$") or "."
+end
+
+local function join_path(left, right)
+  local prefix = normalize_path(left):gsub("/+$", "")
+  local suffix = normalize_path(right):gsub("^/+", "")
+  if prefix == "" or prefix == "." then
+    return suffix
+  end
+  if suffix == "" then
+    return prefix
+  end
+  return prefix .. "/" .. suffix
+end
+
+local function adapter_root()
   local source = debug.getinfo(1, "S").source or ""
   if source:sub(1, 1) == "@" then
     source = source:sub(2)
   end
-  return common.parent_dir(common.normalize_path(source)) or "."
+  return parent_dir(source)
 end
 
-local project_root = _adapter_root()
+local project_root = adapter_root()
 
-local function _run_all(suites, opts)
+local function run_all(suites, opts)
   local total = 0
   local failures = {}
 
@@ -42,7 +61,7 @@ end
 
 return {
   resolve_suites = function(lane, mode)
-    local sample = assert(loadfile(common.join_path(project_root, "src/sample.lua")))()
+    local sample = assert(loadfile(join_path(project_root, "src/sample.lua")))()
     return {
       {
         name = "example." .. tostring(lane),
@@ -63,6 +82,6 @@ return {
       },
     }, mode or "example"
   end,
-  run = _run_all,
+  run = run_all,
   debug_api = debug,
 }

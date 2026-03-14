@@ -39,7 +39,7 @@ local function _test_coverage_collect_tracks_only_tracked_sources_and_accumulate
     local content = assert(io.open(tracked_path, "rb"))
     local text = content:read("*a")
     content:close()
-    assert(require("crap4lua.common").write_file(tracked_path, text:gsub("TMP_ROOT/support/untracked.lua", support_path)))
+    assert(require("crap4lua._internal.common").write_file(tracked_path, text:gsub("TMP_ROOT/support/untracked.lua", support_path)))
 
     local tracked = assert(loadfile(tracked_path))()
     local suites = {

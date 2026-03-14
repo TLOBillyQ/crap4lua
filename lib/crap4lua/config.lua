@@ -1,4 +1,4 @@
-local common = require("crap4lua.common")
+local common = require("crap4lua._internal.common")
 
 local config = {}
 

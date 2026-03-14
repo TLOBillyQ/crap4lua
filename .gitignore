@@ -2,6 +2,6 @@
 .DS_Store
 /tmp/
 *.log
-bin/crap4lua-go
-bin/crap4lua-go.exe
-crap4lua-go
+bin/crap4lua
+bin/crap4lua.exe
+crap4lua

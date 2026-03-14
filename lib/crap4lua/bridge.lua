@@ -1,7 +1,7 @@
-local common = require("crap4lua.common")
+local common = require("crap4lua._internal.common")
 local config = require("crap4lua.config")
 local coverage = require("crap4lua.coverage")
-local json_writer = require("crap4lua.json_writer")
+local json_writer = require("crap4lua._internal.json_writer")
 
 local bridge = {}
 

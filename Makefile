@@ -1,9 +1,9 @@
-GO_BIN := bin/crap4lua-go
+GO_BIN := bin/crap4lua
 
-.PHONY: build-go test-go test-lua test
+.PHONY: build test-go test-lua test
 
-build-go:
-	go build -o $(GO_BIN) ./cmd/crap4lua-go
+build:
+	go build -o $(GO_BIN) ./cmd/crap4lua
 
 test-go:
 	go test ./...

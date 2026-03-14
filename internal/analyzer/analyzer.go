@@ -608,7 +608,7 @@ func cachePathForProject(projectRoot string) string {
 		base = os.TempDir()
 	}
 	projectHash := hashText(projectRoot)
-	return filepath.Join(base, "crap4lua-go", projectHash+".json")
+	return filepath.Join(base, "crap4lua", projectHash+".json")
 }
 
 func loadCache(path string) (cacheFile, error) {
