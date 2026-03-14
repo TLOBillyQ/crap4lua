@@ -8,11 +8,12 @@ local function _text(zh, en)
   return common.bilingual(zh, en)
 end
 
-local function _usage()
+local function _usage(command_name)
+  local command = tostring(command_name or "bin/crap4lua.lua")
   io.write(_text("用法", "Usage") .. ":\n")
-  io.write("  <lua> bin/crap4lua.lua report [--mode <auto|dev|release_trimmed>] [--lane <behavior|contract>] [--out <file>] [--top <n>] [--strict-tests]\n")
-  io.write("  <lua> bin/crap4lua.lua viewer [--out-dir <dir>] [--in-json <file>] [--open]\n")
-  io.write("  <lua> bin/crap4lua.lua\n")
+  io.write("  <lua> " .. command .. " report [--mode <auto|dev|release_trimmed>] [--lane <behavior|contract>] [--out <file>] [--top <n>] [--strict-tests]\n")
+  io.write("  <lua> " .. command .. " viewer [--out-dir <dir>] [--in-json <file>] [--open]\n")
+  io.write("  <lua> " .. command .. "\n")
 end
 
 local function _parse_top(value)
@@ -129,6 +130,7 @@ end
 
 local function _run_viewer(options, env)
   local paths = _resolve_paths(options, env)
+  local command_name = env.command_name or "bin/crap4lua.lua"
   if paths.out_dir == nil then
     error("viewer requires --out-dir <dir>")
   end
@@ -143,8 +145,8 @@ local function _run_viewer(options, env)
           "viewer input json not found or unreadable: "
         ) .. tostring(paths.in_json)
           .. "\n" .. _text(
-            "run `lua bin/crap4lua.lua report --out ",
-            "run `lua bin/crap4lua.lua report --out "
+            "run `lua " .. command_name .. " report --out ",
+            "run `lua " .. command_name .. " report --out "
           )
           .. tostring(paths.in_json)
           .. _text("` first, or omit `--in-json` to generate the report on demand", "` first, or omit `--in-json` to generate the report on demand")
@@ -173,7 +175,7 @@ function cli.run(args, env)
   env = env or {}
   local options = _parse_args(args or {})
   if options.command == "--help" or options.command == "-h" then
-    _usage()
+    _usage(env.command_name)
     return true
   end
   if options.command == nil then
@@ -186,7 +188,7 @@ function cli.run(args, env)
   if options.command == "viewer" then
     return _run_viewer(options, env)
   end
-  _usage()
+  _usage(env.command_name)
   error(_text(
     "未知命令: " .. tostring(options.command),
     "Unknown command: " .. tostring(options.command)
