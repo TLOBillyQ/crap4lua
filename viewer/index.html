@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CRAP Report — Lua</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="grain" aria-hidden="true"></div>
+    <div class="topbar">
+      <span class="topbar_brand">CRAP</span>
+      <span class="topbar_sep">/</span>
+      <span class="topbar_label">Change Risk Anti-Pattern Analysis</span>
+      <button id="theme_toggle" class="theme_toggle" aria-label="Toggle theme">
+        <span class="theme_toggle_icon" aria-hidden="true"></span>
+        <span class="theme_toggle_label"></span>
+      </button>
+    </div>
+
+    <div class="shell">
+      <header class="hero anim_stagger" style="--i:0">
+        <div class="hero_copy">
+          <p class="eyebrow">Lua Engineering Risk</p>
+          <h1>CRAP<br />Hotspots</h1>
+          <p id="summary_text" class="summary_text"></p>
+          <div id="hero_tags" class="hero_tags"></div>
+        </div>
+        <div class="hero_aside">
+          <div class="hero_aside_label">Portfolio Status</div>
+          <div id="lane_status" class="status_badge">Loading</div>
+          <div id="generated_at" class="hero_meta_note"></div>
+        </div>
+      </header>
+
+      <section id="metric_cards" class="metrics_grid anim_stagger" style="--i:1"></section>
+
+      <section class="executive_grid anim_stagger" style="--i:2">
+        <article class="panel spotlight_panel">
+          <div class="panel_header">
+            <div>
+              <p class="panel_eyebrow">Executive Brief</p>
+              <h2>Risk Snapshot</h2>
+            </div>
+          </div>
+          <div id="spotlight_cards" class="spotlight_cards"></div>
+        </article>
+
+        <article class="panel health_panel">
+          <div class="panel_header">
+            <div>
+              <p class="panel_eyebrow">Distribution</p>
+              <h2>Risk Mix</h2>
+            </div>
+          </div>
+          <div id="risk_distribution" class="distribution"></div>
+        </article>
+      </section>
+
+      <main class="dashboard anim_stagger" style="--i:3">
+        <section class="main_column">
+          <div class="panel">
+            <div class="panel_header">
+              <div>
+                <p class="panel_eyebrow">Action Agenda</p>
+                <h2>Leadership Priorities</h2>
+              </div>
+            </div>
+            <div id="agenda_list" class="agenda_list"></div>
+          </div>
+
+          <div class="panel list_panel">
+            <div class="panel_header">
+              <div>
+                <p class="panel_eyebrow">Priority Queue</p>
+                <h2>Top Hotspots</h2>
+              </div>
+              <div id="active_filter" class="filter_badge">All modules</div>
+            </div>
+            <div id="function_results" class="results_meta"></div>
+            <div id="function_rows" class="function_list"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel_header">
+              <div>
+                <p class="panel_eyebrow">Selected Asset</p>
+                <h2>Function Details</h2>
+              </div>
+            </div>
+            <div id="details_card" class="details_card">
+              Select a function to inspect its metrics.
+            </div>
+          </div>
+        </section>
+
+        <aside class="side_column">
+          <div class="panel list_panel">
+            <div class="panel_header">
+              <div>
+                <p class="panel_eyebrow">Module Portfolio</p>
+                <h2>Modules</h2>
+              </div>
+            </div>
+            <div id="module_results" class="results_meta"></div>
+            <div id="module_list" class="module_list"></div>
+          </div>
+        </aside>
+      </main>
+
+      <footer class="site_footer">
+        <span class="footer_mark">CRAP</span>
+        <span class="footer_sep">&middot;</span>
+        <span>Change Risk Anti-Pattern</span>
+        <span class="footer_sep">&middot;</span>
+        <span>Generic Viewer</span>
+      </footer>
+    </div>
+
+    <script src="crap_report_data.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
