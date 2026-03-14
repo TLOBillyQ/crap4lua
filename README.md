@@ -1,39 +1,79 @@
 # crap4lua
 
-`crap4lua` is a standalone Lua toolchain for computing CRAP hotspots from
-`luac` complexity listings plus injected dynamic coverage data.
+`crap4lua` is a standalone Lua toolchain for computing CRAP hotspots from `luac`
+complexity listings plus injected dynamic coverage data.
 
-It ships the reusable core pieces:
+The project is organized as an independent package now:
 
-- `crap4lua.cli`
-- `crap4lua.report`
-- `crap4lua.coverage`
-- `crap4lua.viewer`
-- `crap4lua.common`
+- `lib/crap4lua/` - reusable library code
+- `lib/crap4lua/assets/viewer/` - packaged static viewer assets
+- `bin/crap4lua.lua` - CLI entrypoint
+- `examples/basic/` - runnable example config + adapter
+- `docs/` - CLI, embedding, and migration notes
 
-## Adapter boundary
+## Host boundary
 
-`crap4lua` does not know how a host project runs its test lanes.
-Projects are expected to inject three dependencies when they want dynamic
-coverage collection:
+`crap4lua` does not know how a host project discovers or executes tests.
+Hosts integrate through a single adapter object:
 
-- `resolve_lane_suites(lane, mode)`
-- `run_all(suites, opts)`
-- `debug_api` (optional; defaults to global `debug`)
+```lua
+{
+  resolve_suites = function(lane, mode) ... end,
+  run = function(suites, opts) ... end,
+  debug_api = debug, -- optional
+}
+```
 
-That keeps the core independent from any specific test catalog or runtime.
+The core library accepts either:
+
+- a precomputed `coverage_result = { line_hits = ..., lanes = ... }`, or
+- a `coverage = { adapter = ..., lanes = ..., mode = ... }` table.
 
 ## CLI
 
-Run from this repo:
+Generate a report from a config file:
 
-    lua bin/crap4lua.lua --help
+```sh
+lua bin/crap4lua.lua report --config examples/basic/crap4lua.config.lua --out tmp/report.json
+```
 
-The standalone CLI can always render a viewer from an existing JSON report.
-Building a fresh report requires an injected coverage adapter.
+Render a viewer from a config file:
+
+```sh
+lua bin/crap4lua.lua viewer --config examples/basic/crap4lua.config.lua --out-dir tmp/crap_view
+```
+
+Render a viewer from an existing JSON report:
+
+```sh
+lua bin/crap4lua.lua viewer --in-json tmp/report.json --out-dir tmp/crap_view --open
+```
+
+## Config shape
+
+`crap4lua.config.lua` returns a Lua table:
+
+```lua
+return {
+  project_name = "Example App",
+  project_root = ".",
+  source_roots = { "src" },
+  coverage = {
+    lanes = { "unit" },
+    mode = "example",
+    adapter = "adapter.lua",
+  },
+}
+```
 
 ## Tests
 
-Run the independent contract suite with:
+Run the standalone suite with:
 
-    lua tests/run.lua
+```sh
+lua tests/run.lua
+```
+
+## Packaging
+
+A LuaRocks spec is included as `/Users/billyq/Dev/Github/Lua/crap4lua/crap4lua-dev-1.rockspec`.

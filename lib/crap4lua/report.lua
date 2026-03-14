@@ -28,9 +28,14 @@ local function _round_score(value)
   return math.floor(value * 100 + 0.5) / 100
 end
 
-local function _build_scan(project_root)
+local function _default_project_name(project_root)
+  local normalized = common.normalize_path(project_root)
+  return normalized:match("([^/]+)/?$") or "project"
+end
+
+local function _build_scan(project_root, source_roots)
   local scan_result, err = source_scan.scan_with_options({
-    source_roots = { "src" },
+    source_roots = source_roots,
   }, {
     project_root = project_root,
   })
@@ -180,10 +185,40 @@ local function _print_summary(result, top_n)
   end
 end
 
+local function _resolve_coverage_result(opts, project_root, tracked_sources)
+  if opts.coverage_result ~= nil then
+    return opts.coverage_result
+  end
+
+  local coverage_opts = opts.coverage
+  if type(coverage_opts) ~= "table" then
+    return nil, "report.build requires coverage_result or coverage = { adapter = ..., lanes = ... }"
+  end
+
+  local collector = coverage_opts.collect or coverage.collect
+  local ok, result = xpcall(function()
+    return collector({
+      project_root = project_root,
+      tracked_sources = tracked_sources,
+      lanes = coverage_opts.lanes,
+      mode = coverage_opts.mode,
+      adapter = coverage_opts.adapter,
+    })
+  end, debug.traceback)
+  if not ok then
+    return nil, result
+  end
+  return result
+end
+
 function report.build(opts)
   opts = opts or {}
+  if type(opts.source_roots) ~= "table" or #opts.source_roots == 0 then
+    return nil, "report.build requires source_roots = { ... }"
+  end
+
   local project_root = common.resolve_path(common.current_dir(), opts.project_root or common.current_dir())
-  local modules, scan_err = _build_scan(project_root)
+  local modules, scan_err = _build_scan(project_root, opts.source_roots)
   if modules == nil then
     return nil, scan_err
   end
@@ -193,21 +228,17 @@ function report.build(opts)
     tracked_sources[#tracked_sources + 1] = module_info.relative_source_path
   end
 
-  local coverage_result = (opts.collect_coverage or coverage.collect)({
-    project_root = project_root,
-    tracked_sources = tracked_sources,
-    lanes = opts.lanes,
-    mode = opts.mode,
-    resolve_lane_suites = opts.resolve_lane_suites,
-    run_all = opts.run_all,
-    debug_api = opts.debug_api,
-  })
+  local coverage_result, coverage_err = _resolve_coverage_result(opts, project_root, tracked_sources)
+  if coverage_result == nil then
+    return nil, coverage_err
+  end
 
-  local functions, function_err = _build_function_rows(modules, coverage_result.line_hits or {})
+  local line_hits = coverage_result.line_hits or {}
+  local functions, function_err = _build_function_rows(modules, line_hits)
   if functions == nil then
     return nil, function_err
   end
-  local module_rows = _build_module_rows(modules, functions, coverage_result.line_hits or {})
+  local module_rows = _build_module_rows(modules, functions, line_hits)
 
   local total_crap = 0
   local critical_count = 0
@@ -221,8 +252,10 @@ function report.build(opts)
   local result = {
     metadata = {
       tool = "crap4lua_report",
-      schema_version = 1,
+      schema_version = 2,
       project_root = project_root,
+      project_name = opts.project_name or _default_project_name(project_root),
+      source_roots = common.copy_array(opts.source_roots),
       generated_at = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     },
     summary = {

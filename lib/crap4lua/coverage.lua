@@ -59,25 +59,27 @@ local function _make_hook(project_root, tracked_sources, line_hits, debug_api)
   end
 end
 
-local function _missing_resolve_lane_suites()
-  error("coverage.collect requires resolve_lane_suites(lane, mode) injector")
-end
-
-local function _missing_run_all()
-  error("coverage.collect requires run_all(suites, opts) injector")
-end
-
-local function _resolve_dependencies(opts)
+local function _resolve_adapter(opts)
+  local adapter = opts.adapter
+  if type(adapter) ~= "table" then
+    error("coverage.collect requires adapter = { resolve_suites = ..., run = ... }")
+  end
+  if type(adapter.resolve_suites) ~= "function" then
+    error("coverage adapter requires resolve_suites(lane, mode)")
+  end
+  if type(adapter.run) ~= "function" then
+    error("coverage adapter requires run(suites, opts)")
+  end
   return {
-    resolve_lane_suites = opts.resolve_lane_suites or _missing_resolve_lane_suites,
-    run_all = opts.run_all or _missing_run_all,
-    debug_api = opts.debug_api or debug,
+    resolve_suites = adapter.resolve_suites,
+    run = adapter.run,
+    debug_api = adapter.debug_api or debug,
   }
 end
 
 function coverage.collect(opts)
   opts = opts or {}
-  local deps = _resolve_dependencies(opts)
+  local deps = _resolve_adapter(opts)
   local project_root = common.normalize_path(opts.project_root)
   local tracked_sources = {}
   for _, source_path in ipairs(opts.tracked_sources or {}) do
@@ -87,11 +89,11 @@ function coverage.collect(opts)
   local line_hits = {}
   local lane_results = {}
 
-  for _, lane in ipairs(opts.lanes or { "behavior" }) do
-    local suites, resolved_mode = deps.resolve_lane_suites(lane, opts.mode)
+  for _, lane in ipairs(opts.lanes or { "default" }) do
+    local suites, resolved_mode = deps.resolve_suites(lane, opts.mode)
     local hook = _make_hook(project_root, tracked_sources, line_hits, deps.debug_api)
-    local result = deps.run_all(suites, {
-      mode = resolved_mode,
+    local result = deps.run(suites or {}, {
+      mode = resolved_mode or opts.mode or lane,
       capture_logs = true,
       reporter = _silent_reporter(),
       raise_on_failure = false,
@@ -101,14 +103,15 @@ function coverage.collect(opts)
       after_case = function()
         deps.debug_api.sethook()
       end,
-    })
+    }) or {}
+
     lane_results[#lane_results + 1] = {
       lane = lane,
-      mode = resolved_mode,
-      total = result.total,
-      failed = result.failed,
+      mode = resolved_mode or opts.mode or lane,
+      total = result.total or 0,
+      failed = result.failed == true,
       failure_count = #(result.failures or {}),
-      failures = result.failures,
+      failures = result.failures or {},
     }
   end
 

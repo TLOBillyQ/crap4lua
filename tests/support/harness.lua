@@ -1,4 +1,4 @@
-require("tests.bootstrap")
+require("tests.support.bootstrap")
 
 local function normalize_suite(suite, suite_index)
   if suite and suite.tests then

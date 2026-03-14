@@ -9,11 +9,9 @@ local function _repo_root()
 end
 
 local repo_root = _repo_root()
-package.path = repo_root .. "/?.lua;" .. repo_root .. "/?/?.lua;" .. package.path
+package.path = repo_root .. "/lib/?.lua;" .. repo_root .. "/lib/?/?.lua;" .. package.path
 
 local crap4lua = require("crap4lua")
 crap4lua.run(arg or {}, {
-  module_root = repo_root,
-  asset_root = repo_root .. "/viewer",
-  default_project_root = ".",
+  command_name = "bin/crap4lua.lua",
 })
