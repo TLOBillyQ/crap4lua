@@ -9,7 +9,7 @@ local function _text(zh, en)
 end
 
 local function _usage()
-  io.write(_text("Usage", "Usage") .. ":\n")
+  io.write(_text("用法", "Usage") .. ":\n")
   io.write("  <lua> bin/crap4lua.lua report [--mode <auto|dev|release_trimmed>] [--lane <behavior|contract>] [--out <file>] [--top <n>] [--strict-tests]\n")
   io.write("  <lua> bin/crap4lua.lua viewer [--out-dir <dir>] [--in-json <file>] [--open]\n")
   io.write("  <lua> bin/crap4lua.lua\n")
@@ -71,7 +71,7 @@ local function _parse_args(args)
       index = index + 2
     else
       error(_text(
-        "Unknown flag: " .. tostring(token),
+        "未知参数: " .. tostring(token),
         "Unknown flag: " .. tostring(token)
       ))
     end
@@ -188,7 +188,7 @@ function cli.run(args, env)
   end
   _usage()
   error(_text(
-    "Unknown command: " .. tostring(options.command),
+    "未知命令: " .. tostring(options.command),
     "Unknown command: " .. tostring(options.command)
   ))
 end
