@@ -1,6 +1,7 @@
 # Embedding
 
-Use the library directly when the host project already knows how to gather coverage.
+Use the Lua layer when the host project needs Lua-native config and coverage adapters.
+The Lua layer will bridge into the Go engine for static analysis and viewer export.
 
 ## Precomputed coverage
 
@@ -14,8 +15,8 @@ local result = assert(report.build({
   coverage_result = {
     line_hits = {
       ["src/example.lua"] = {
-        [10] = true,
-        [11] = true,
+        ["10"] = true,
+        ["11"] = true,
       },
     },
     lanes = {
@@ -57,18 +58,13 @@ local result = assert(report.build({
 }))
 ```
 
-## Output contract
+## Direct Go engine use
 
-`report.build()` returns a table containing:
+If the host already has a JSON coverage payload, it can call the Go engine directly:
 
-- `metadata.project_name`
-- `metadata.project_root`
-- `metadata.source_roots`
-- `summary.module_count`
-- `summary.function_count`
-- `summary.total_crap`
-- `lanes`
-- `modules`
-- `functions`
+```sh
+./bin/crap4lua-go report --request-json /tmp/request.json --response-json /tmp/response.json
+```
 
-Use `require("crap4lua.viewer").write()` to render the static viewer bundle from that table.
+The request JSON carries `project_root`, `project_name`, `source_roots`,
+`coverage_result`, `top`, and `strict_tests`.

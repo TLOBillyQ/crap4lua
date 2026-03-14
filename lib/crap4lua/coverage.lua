@@ -19,7 +19,19 @@ local function _resolve_hit_lines(line_hits, relative_path)
   return hit_lines
 end
 
-local function _make_hook(project_root, tracked_sources, line_hits, debug_api)
+local function _is_tracked_source(relative_path, tracked_sources, tracked_roots)
+  if tracked_sources[relative_path] == true then
+    return true
+  end
+  for _, root in ipairs(tracked_roots or {}) do
+    if relative_path == root or relative_path:match("^" .. root:gsub("%.", "%%.") .. "/") then
+      return true
+    end
+  end
+  return false
+end
+
+local function _make_hook(project_root, tracked_sources, tracked_roots, line_hits, debug_api)
   local function_cache = setmetatable({}, { __mode = "k" })
   local getinfo = debug_api.getinfo
   local relative_to = common.relative_to
@@ -48,7 +60,7 @@ local function _make_hook(project_root, tracked_sources, line_hits, debug_api)
 
     local normalized = relative_to(project_root, source_info.source)
     normalized = normalized:gsub("^%./", "")
-    if tracked_sources[normalized] ~= true then
+    if not _is_tracked_source(normalized, tracked_sources, tracked_roots) then
       function_cache[func] = false
       return
     end
@@ -85,13 +97,20 @@ function coverage.collect(opts)
   for _, source_path in ipairs(opts.tracked_sources or {}) do
     tracked_sources[common.normalize_path(source_path)] = true
   end
+  local tracked_roots = {}
+  for _, root in ipairs(opts.source_roots or {}) do
+    local normalized_root = common.normalize_path(root):gsub("^%./", ""):gsub("/+$", "")
+    if normalized_root ~= "" then
+      tracked_roots[#tracked_roots + 1] = normalized_root
+    end
+  end
 
   local line_hits = {}
   local lane_results = {}
 
   for _, lane in ipairs(opts.lanes or { "default" }) do
     local suites, resolved_mode = deps.resolve_suites(lane, opts.mode)
-    local hook = _make_hook(project_root, tracked_sources, line_hits, deps.debug_api)
+    local hook = _make_hook(project_root, tracked_sources, tracked_roots, line_hits, deps.debug_api)
     local result = deps.run(suites or {}, {
       mode = resolved_mode or opts.mode or lane,
       capture_logs = true,

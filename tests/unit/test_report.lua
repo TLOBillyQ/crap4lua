@@ -119,6 +119,8 @@ local function _test_report_builds_metrics_from_precomputed_coverage()
     if result == nil then
       error(err)
     end
+    helpers.assert_eq(result.metadata.engine, "go", "report should identify the go engine")
+    helpers.assert_eq(result.metadata.schema_version, 3, "report should expose the go-backed schema version")
     helpers.assert_eq(result.metadata.project_name, "Synthetic App", "report should carry configured project name")
     helpers.assert_eq(result.metadata.source_roots[1], "app", "report should expose configured source roots")
     helpers.assert_eq(result.summary.module_count, 1, "fixture should yield one module")
