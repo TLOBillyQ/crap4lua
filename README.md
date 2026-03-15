@@ -1,7 +1,7 @@
 # crap4lua
 
 `crap4lua` is a CRAP (Change Risk Anti-Patterns) hotspot analyzer for Lua code.
-It uses a Go CLI for product workflows and a small Lua runtime bridge for config loading, host adapter execution, and coverage capture.
+It uses a Go CLI for product workflows and Lua bridge modules for config loading, host adapter execution, and coverage capture.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ It uses a Go CLI for product workflows and a small Lua runtime bridge for config
                    │
                    ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Lua Bridge Runtime                                     │
+│  Lua Bridge Modules                                     │
 │  - Execute crap4lua.config.lua                          │
 │  - Load host adapter                                    │
 │  - Collect coverage via debug.sethook                   │
@@ -105,7 +105,7 @@ return {
 
 ## Packaging
 
-The repository includes a LuaRocks spec for the Lua bridge runtime. It installs the bridge/config/coverage modules plus their private runtime helpers; the full product workflow stays in the Go CLI.
+The repository includes a LuaRocks spec for the Lua bridge runtime. It installs the bridge/config/coverage modules plus their private runtime helpers; the full product workflow stays in the Go CLI and no standalone Lua entry script is shipped.
 
 ## Tests
 

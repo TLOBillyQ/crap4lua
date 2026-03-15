@@ -13,6 +13,7 @@
 - CLI commands: `crap4lua report`, `crap4lua collect`, `crap4lua viewer`
 - Lua runtime APIs: `crap4lua.bridge`, `crap4lua.config`, `crap4lua.coverage`
 - host adapter contract: `resolve_suites`, `run`, `debug_api`
+- Lua bridge usage is module-based only; no standalone bridge script is shipped
 
 ## Updated workflow
 

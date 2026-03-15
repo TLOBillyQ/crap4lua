@@ -28,6 +28,8 @@ local result, err = bridge.collect({
 assert(result, err)
 ```
 
+The bridge is exposed as Lua modules only. There is no standalone bridge script entrypoint in the repository.
+
 The bridge result contains:
 - `project_root`
 - `project_name`

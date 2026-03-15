@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -36,7 +35,7 @@ type RunCollectOptions struct {
 	// LuaBinary optionally sets lua executable path/name (e.g. "lua", "lua5.4").
 	LuaBinary string
 
-	// RepoRoot optionally sets repository root containing scripts/crap4lua-bridge.lua.
+	// RepoRoot optionally sets repository root containing the Lua bridge modules.
 	// If empty, current working directory is used.
 	RepoRoot string
 }
@@ -55,11 +54,8 @@ func New(luaBinary, repoRoot string) *Runner {
 	}
 }
 
-// Collect executes:
-//
-//	lua scripts/crap4lua-bridge.lua collect --config <file> [--lane ...] [--mode ...] [--project-root ...]
-//
-// and parses the JSON output into BridgeCollectResponse.
+// Collect loads the Lua bridge modules directly and parses the JSON output into
+// BridgeCollectResponse.
 func (r *Runner) Collect(opts RunCollectOptions) (ipc.BridgeCollectResponse, error) {
 	var zero ipc.BridgeCollectResponse
 
@@ -74,38 +70,11 @@ func (r *Runner) Collect(opts RunCollectOptions) (ipc.BridgeCollectResponse, err
 
 	repoRoot := firstNonEmpty(opts.RepoRoot, r.RepoRoot)
 	if repoRoot == "" {
-		var err error
-		repoRoot, err = os.Getwd()
-		if err != nil {
-			return zero, err
-		}
+		repoRoot = "."
 	}
 	repoRoot, _ = filepath.Abs(repoRoot)
 
-	bridgeEntry := filepath.Join(repoRoot, "scripts", "crap4lua-bridge.lua")
-	if _, err := os.Stat(bridgeEntry); err != nil {
-		return zero, fmt.Errorf("bridge entry not found: %s: %w", bridgeEntry, err)
-	}
-
-	args := []string{
-		bridgeEntry,
-		"collect",
-		"--config", opts.ConfigPath,
-	}
-	for _, lane := range opts.Lanes {
-		if strings.TrimSpace(lane) == "" {
-			continue
-		}
-		args = append(args, "--lane", lane)
-	}
-	if strings.TrimSpace(opts.Mode) != "" {
-		args = append(args, "--mode", opts.Mode)
-	}
-	if strings.TrimSpace(opts.ProjectRoot) != "" {
-		args = append(args, "--project-root", opts.ProjectRoot)
-	}
-
-	cmd := exec.Command(luaBin, args...)
+	cmd := exec.Command(luaBin, "-e", buildCollectChunk(repoRoot, opts))
 	cmd.Dir = repoRoot
 
 	var stdout, stderr bytes.Buffer
@@ -194,4 +163,58 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func buildCollectChunk(repoRoot string, opts RunCollectOptions) string {
+	paths := []string{
+		filepath.ToSlash(filepath.Join(repoRoot, "lib", "?.lua")),
+		filepath.ToSlash(filepath.Join(repoRoot, "lib", "?", "?.lua")),
+	}
+
+	var chunk strings.Builder
+	fmt.Fprintf(&chunk, "package.path = %s .. ';' .. %s .. ';' .. package.path\n", luaString(paths[0]), luaString(paths[1]))
+	chunk.WriteString("local bridge = require(\"crap4lua.bridge\")\n")
+	chunk.WriteString("local json_writer = require(\"crap4lua._internal.json_writer\")\n")
+	chunk.WriteString("local result, err = bridge.collect({\n")
+	fmt.Fprintf(&chunk, "  config = %s,\n", luaString(opts.ConfigPath))
+	if len(opts.Lanes) > 0 {
+		chunk.WriteString("  lanes = {")
+		first := true
+		for _, lane := range opts.Lanes {
+			if strings.TrimSpace(lane) == "" {
+				continue
+			}
+			if !first {
+				chunk.WriteString(", ")
+			}
+			chunk.WriteString(luaString(lane))
+			first = false
+		}
+		chunk.WriteString("},\n")
+	}
+	if strings.TrimSpace(opts.Mode) != "" {
+		fmt.Fprintf(&chunk, "  mode = %s,\n", luaString(opts.Mode))
+	}
+	if strings.TrimSpace(opts.ProjectRoot) != "" {
+		fmt.Fprintf(&chunk, "  project_root = %s,\n", luaString(opts.ProjectRoot))
+	}
+	chunk.WriteString("})\n")
+	chunk.WriteString("if not result then\n")
+	chunk.WriteString("  io.stderr:write(tostring(err), \"\\n\")\n")
+	chunk.WriteString("  os.exit(1)\n")
+	chunk.WriteString("end\n")
+	chunk.WriteString("io.write(json_writer.encode(result))\n")
+	chunk.WriteString("io.write(\"\\n\")\n")
+	return chunk.String()
+}
+
+func luaString(value string) string {
+	replacer := strings.NewReplacer(
+		"\\", "\\\\",
+		"\"", "\\\"",
+		"\n", "\\n",
+		"\r", "\\r",
+		"\t", "\\t",
+	)
+	return "\"" + replacer.Replace(value) + "\""
 }

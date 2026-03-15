@@ -13,7 +13,7 @@
 
 ### Go CLI
 - parse command-line flags
-- invoke the Lua bridge when coverage must be collected
+- invoke Lua bridge modules when coverage must be collected
 - analyze Lua source with `luac -p -l`
 - compute CRAP metrics and write report JSON
 - export the viewer bundle
@@ -23,6 +23,7 @@
 - resolve the host adapter
 - execute suites through the adapter
 - collect line hits with `debug.sethook`
+- expose bridge functionality as Lua modules only, not as a separate script entry
 
 ## Config contract
 

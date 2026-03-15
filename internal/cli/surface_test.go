@@ -45,6 +45,7 @@ func TestRepoDoesNotReferenceRemovedSurface(t *testing.T) {
 	banned := []string{
 		"crap4lua" + "-go",
 		"bin/crap4lua" + ".lua",
+		"scripts/crap4lua-bridge.lua",
 		"require(\"crap4lua.report\")",
 		"require(\"crap4lua.viewer\")",
 		"require(\"crap4lua.engine\")",
@@ -85,5 +86,11 @@ func TestRepoDoesNotReferenceRemovedSurface(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRepoDoesNotShipBridgeScriptEntry(t *testing.T) {
+	if _, err := os.Stat(filepath.Join("..", "..", "scripts", "crap4lua-bridge.lua")); !os.IsNotExist(err) {
+		t.Fatalf("expected bridge script entry to be removed, got err=%v", err)
 	}
 }
