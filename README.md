@@ -113,3 +113,76 @@ The repository includes a LuaRocks spec for the Lua bridge runtime. It installs 
 make test-go
 make test-lua
 ```
+
+---
+
+## 中文文档
+
+`crap4lua` 是一个用于 Lua 代码的 CRAP（变更风险反模式）热点分析器。
+它使用 Go CLI 处理产品工作流，使用 Lua 桥接模块进行配置加载、宿主适配器执行和覆盖率收集。
+
+### 架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Go CLI (cmd/crap4lua)                                 │
+│  - report --config ...                                 │
+│  - collect --config ...                                │
+│  - viewer --in-json ...                                │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────────────────┐
+│  Lua Bridge Modules                                     │
+│  - Execute crap4lua.config.lua                          │
+│  - Load host adapter                                    │
+│  - Collect coverage via debug.sethook                   │
+│  - Return JSON to Go                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 快速开始
+
+```bash
+make build
+./bin/crap4lua report --config examples/basic/crap4lua.config.lua
+./bin/crap4lua report --config examples/basic/crap4lua.config.lua --response-json report.json
+./bin/crap4lua viewer --in-json report.json --out-dir viewer --open
+```
+
+### CLI 命令
+
+#### report
+配置驱动的报告生成：
+```bash
+./bin/crap4lua report --config <文件> [--lane <名称>] [--mode <名称>] [--top <n>] [--strict-tests] [--project-root <目录>] [--response-json <文件>]
+```
+
+#### collect
+用于调试或检查的桥接收集：
+```bash
+./bin/crap4lua collect --config <文件> --out <json> [--lane <名称>] [--mode <名称>] [--project-root <目录>]
+```
+
+#### viewer
+生成独立的查看器包：
+```bash
+./bin/crap4lua viewer --in-json <文件> --out-dir <目录> [--open]
+```
+
+### 配置格式
+
+`crap4lua.config.lua` 返回一个 Lua 表：
+
+```lua
+return {
+  project_name = "示例应用",
+  project_root = ".",
+  source_roots = { "src" },
+  coverage = {
+    lanes = { "unit" },
+    mode = "example",
+    adapter = "adapter.lua",
+  },
+}
+```
