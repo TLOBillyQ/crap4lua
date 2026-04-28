@@ -111,6 +111,25 @@ function coverage.collect(opts)
   for _, lane in ipairs(opts.lanes or { "default" }) do
     local suites, resolved_mode = deps.resolve_suites(lane, opts.mode)
     local hook = _make_hook(project_root, tracked_sources, tracked_roots, line_hits, deps.debug_api)
+    local original_create = coroutine.create
+    local original_wrap = coroutine.wrap
+
+    local function _patched_create(fn)
+      local co = original_create(fn)
+      deps.debug_api.sethook(co, hook, "l")
+      return co
+    end
+
+    local function _patched_wrap(fn)
+      local co = original_create(fn)
+      deps.debug_api.sethook(co, hook, "l")
+      return function(...)
+        local results = table.pack(coroutine.resume(co, ...))
+        if not results[1] then error(results[2], 0) end
+        return table.unpack(results, 2, results.n)
+      end
+    end
+
     local result = deps.run(suites or {}, {
       mode = resolved_mode or opts.mode or lane,
       capture_logs = true,
@@ -118,9 +137,13 @@ function coverage.collect(opts)
       raise_on_failure = false,
       before_case = function()
         deps.debug_api.sethook(hook, "l")
+        coroutine.create = _patched_create
+        coroutine.wrap = _patched_wrap
       end,
       after_case = function()
         deps.debug_api.sethook()
+        coroutine.create = original_create
+        coroutine.wrap = original_wrap
       end,
     }) or {}
 
