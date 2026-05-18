@@ -222,6 +222,29 @@ local function _write_json(path, payload)
   return true
 end
 
+local function _read_json_file(path)
+  local content, read_err = common.read_file(path)
+  if not content then return nil, read_err end
+  local json_reader = require("shared.lib.json_reader")
+  local ok_parse, decoded = pcall(json_reader.decode, content)
+  if not ok_parse then return nil, "JSON parse error: " .. tostring(decoded) end
+  return decoded
+end
+
+local function _build_write_report(options, env, out, stderr)
+  local report, err = _build_report(options, env)
+  if not report then
+    stderr:write(tostring(err) .. "\n")
+    return nil
+  end
+  local ok, write_err = _write_json(out, report)
+  if not ok then
+    stderr:write(tostring(write_err) .. "\n")
+    return nil
+  end
+  return report
+end
+
 local function _cov_ratio(hit, exec)
   if exec == 0 then return nil end
   return hit / exec
@@ -371,16 +394,7 @@ function cli.run(args, env)
 
   if options.command == "report" then
     local out = options.out and resolve(options.out) or resolve(default_report_out)
-    local report, err = _build_report(options, env)
-    if not report then
-      stderr:write(tostring(err) .. "\n")
-      return 1
-    end
-    local ok, write_err = _write_json(out, report)
-    if not ok then
-      stderr:write(tostring(write_err) .. "\n")
-      return 1
-    end
+    if not _build_write_report(options, env, out, stderr) then return 1 end
     stdout:write("crap report json: " .. common.normalize_path(out) .. "\n")
     return 0
   end
@@ -442,15 +456,9 @@ function cli.run(args, env)
     local out_dir = options.out_dir and resolve(options.out_dir) or resolve(default_view_dir)
     local report_data
     if options.in_json and options.in_json ~= "" then
-      local content, read_err = common.read_file(resolve(options.in_json))
-      if not content then
+      local decoded, read_err = _read_json_file(resolve(options.in_json))
+      if not decoded then
         stderr:write(tostring(read_err) .. "\n")
-        return 1
-      end
-      local json_reader = require("shared.lib.json_reader")
-      local ok_parse, decoded = pcall(json_reader.decode, content)
-      if not ok_parse then
-        stderr:write("JSON parse error: " .. tostring(decoded) .. "\n")
         return 1
       end
       report_data = decoded
@@ -482,29 +490,18 @@ function cli.run(args, env)
       if common.path_exists(default_path) then
         in_json = default_path
       else
-        local report, err = _build_report(options, env)
-        if not report then
-          stderr:write(tostring(err) .. "\n")
-          return 1
-        end
-        local ok, write_err = _write_json(resolve(default_report_out), report)
-        if not ok then
-          stderr:write(tostring(write_err) .. "\n")
-          return 1
-        end
-        in_json = resolve(default_report_out)
+        if not _build_write_report(options, env, default_path, stderr) then return 1 end
+        in_json = default_path
       end
     end
 
-    local json_text, read_err = common.read_file(in_json)
-    if not json_text then
+    local report, read_err = _read_json_file(in_json)
+    if not report then
       stderr:write("Cannot read report: " .. tostring(read_err) .. "\n")
       return 1
     end
-    local json_reader = require("shared.lib.json_reader")
-    local ok_parse, report = pcall(json_reader.decode, json_text)
-    if not ok_parse or type(report) ~= "table" then
-      stderr:write("JSON parse error: " .. tostring(report) .. "\n")
+    if type(report) ~= "table" then
+      stderr:write("JSON parse error: report is not a table\n")
       return 1
     end
     if type(report.functions) ~= "table" then
@@ -555,20 +552,12 @@ function cli.run(args, env)
 
   if options.command == "bare" then
     local out = resolve(default_report_out)
-    local report, err = _build_report(options, env)
-    if not report then
-      stderr:write(tostring(err) .. "\n")
-      return 1
-    end
-    local ok, write_err = _write_json(out, report)
-    if not ok then
-      stderr:write(tostring(write_err) .. "\n")
-      return 1
-    end
+    local report = _build_write_report(options, env, out, stderr)
+    if not report then return 1 end
     stdout:write("crap report json: " .. common.normalize_path(out) .. "\n")
 
     local out_dir = resolve(default_view_dir)
-    ok, err = viewer_mod.generate(report, out_dir, {
+    local ok, err = viewer_mod.generate(report, out_dir, {
       open = true,
       open_path = env.open_path,
     })
