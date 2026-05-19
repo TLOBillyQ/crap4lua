@@ -8,7 +8,7 @@ local cli = {}
 
 local function _help_text(command_name)
   return table.concat({
-    "Usage:",
+    "用法 / Usage:",
     "  lua " .. command_name .. " report [--lane NAME] [--runner NAME] [--out FILE] [--top N] [--strict-tests] [--project-root DIR]",
     "  lua " .. command_name .. " collect [--lane NAME] [--runner NAME] --out FILE [--project-root DIR]",
     "  lua " .. command_name .. " dry-run [--lane NAME] [--runner NAME] [--config FILE]",
@@ -284,11 +284,13 @@ local function _aggregate_from_report(report, tiers)
     }
   end
   local uncategorized = { exec_lines = 0, hit_lines = 0, file_stats = {} }
-  for _, func in ipairs(report.functions or {}) do
-    local sp = func.source_path or func.source_name
+  local items = (type(report.modules) == "table" and #report.modules > 0)
+    and report.modules or report.functions or {}
+  for _, item in ipairs(items) do
+    local sp = item.source_path or item.source_name
     if sp then
-      local exec = func.executable_line_count or 0
-      local hit = func.hit_line_count or 0
+      local exec = item.executable_line_count or 0
+      local hit = item.hit_line_count or 0
       local ti = _file_tier_index(sp, tiers)
       local bucket = ti and tier_stats[ti] or uncategorized
       bucket.exec_lines = bucket.exec_lines + exec

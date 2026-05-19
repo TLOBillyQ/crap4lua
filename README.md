@@ -1,71 +1,23 @@
 # crap4lua
 
-`crap4lua` is a CRAP (Change Risk Anti-Patterns) hotspot analyzer for Lua code.
-It uses a Go CLI for product workflows and Lua bridge modules for config loading, host adapter execution, and coverage capture.
+`crap4lua` is a pure-Lua CRAP (Change Risk Anti-Patterns) hotspot analyzer for
+Lua code. It collects coverage through host-provided adapters, analyzes function
+complexity from `luac -p -l` output, and generates JSON or static HTML reports.
 
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Go CLI (cmd/crap4lua)                                 │
-│  - report --config ...                                 │
-│  - collect --config ...                                │
-│  - viewer --in-json ...                                │
-└──────────────────┬──────────────────────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────────────────────┐
-│  Lua Bridge Modules                                     │
-│  - Execute crap4lua.config.lua                          │
-│  - Load host adapter                                    │
-│  - Collect coverage via debug.sethook                   │
-│  - Return JSON to Go                                    │
-└─────────────────────────────────────────────────────────┘
-```
-
-## Quick Start
+## CLI
 
 ```sh
-make build
-./bin/crap4lua report --config examples/basic/crap4lua.config.lua
-./bin/crap4lua report --config examples/basic/crap4lua.config.lua --response-json report.json
-./bin/crap4lua viewer --in-json report.json --out-dir viewer --open
+lua tools/quality/crap.lua report [--lane NAME] [--runner NAME] [--out FILE] [--top N]
+lua tools/quality/crap.lua collect [--lane NAME] [--runner NAME] --out FILE
+lua tools/quality/crap.lua dry-run [--lane NAME] [--runner NAME]
+lua tools/quality/crap.lua viewer --in-json FILE --out-dir DIR [--open]
+lua tools/quality/crap.lua summary --in-json FILE [--tier-config FILE] [--gate]
 ```
 
-## CLI Commands
+The library modules live under `lib/crap4lua/` and are self-contained. Hosts wire
+their own adapter through a config file.
 
-### report
-Config-driven report generation:
-```sh
-./bin/crap4lua report --config <file> [--lane <name>] [--mode <name>] [--top <n>] [--strict-tests] [--project-root <dir>] [--response-json <file>]
-```
-
-Low-level JSON mode:
-```sh
-./bin/crap4lua report --request-json <file> --response-json <file>
-```
-
-### collect
-Bridge collection for debugging or inspection:
-```sh
-./bin/crap4lua collect --config <file> --out <json> [--lane <name>] [--mode <name>] [--project-root <dir>]
-```
-
-### viewer
-Generate a standalone viewer bundle:
-```sh
-./bin/crap4lua viewer --in-json <file> --out-dir <dir> [--open]
-```
-
-## Public Surfaces
-
-### Official product surface
-- CLI: `crap4lua report`, `crap4lua collect`, `crap4lua viewer`
-- Lua bridge API: `require("crap4lua.bridge")`
-- Lua runtime helpers: `require("crap4lua.config")`, `require("crap4lua.coverage")`
-
-### Host adapter contract
-`crap4lua` does not discover or run host tests by itself. Hosts provide a Lua adapter:
+## Host Adapter Contract
 
 ```lua
 return {
@@ -88,8 +40,6 @@ return {
 
 ## Config Format
 
-`crap4lua.config.lua` returns a Lua table:
-
 ```lua
 return {
   project_name = "Example App",
@@ -103,86 +53,20 @@ return {
 }
 ```
 
-## Packaging
+## Requirements
 
-The repository includes a LuaRocks spec for the Lua bridge runtime. It installs the bridge/config/coverage modules plus their private runtime helpers; the full product workflow stays in the Go CLI and no standalone Lua entry script is shipped.
+- Lua
+- `luac` available on `PATH`
 
 ## Tests
 
 ```sh
-make test-go
-make test-lua
+make test
 ```
 
 ---
 
 ## 中文文档
 
-`crap4lua` 是一个用于 Lua 代码的 CRAP（变更风险反模式）热点分析器。
-它使用 Go CLI 处理产品工作流，使用 Lua 桥接模块进行配置加载、宿主适配器执行和覆盖率收集。
-
-### 架构
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Go CLI (cmd/crap4lua)                                 │
-│  - report --config ...                                 │
-│  - collect --config ...                                │
-│  - viewer --in-json ...                                │
-└──────────────────┬──────────────────────────────────────┘
-                   │
-                   ▼
-┌─────────────────────────────────────────────────────────┐
-│  Lua Bridge Modules                                     │
-│  - Execute crap4lua.config.lua                          │
-│  - Load host adapter                                    │
-│  - Collect coverage via debug.sethook                   │
-│  - Return JSON to Go                                    │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 快速开始
-
-```bash
-make build
-./bin/crap4lua report --config examples/basic/crap4lua.config.lua
-./bin/crap4lua report --config examples/basic/crap4lua.config.lua --response-json report.json
-./bin/crap4lua viewer --in-json report.json --out-dir viewer --open
-```
-
-### CLI 命令
-
-#### report
-配置驱动的报告生成：
-```bash
-./bin/crap4lua report --config <文件> [--lane <名称>] [--mode <名称>] [--top <n>] [--strict-tests] [--project-root <目录>] [--response-json <文件>]
-```
-
-#### collect
-用于调试或检查的桥接收集：
-```bash
-./bin/crap4lua collect --config <文件> --out <json> [--lane <名称>] [--mode <名称>] [--project-root <目录>]
-```
-
-#### viewer
-生成独立的查看器包：
-```bash
-./bin/crap4lua viewer --in-json <文件> --out-dir <目录> [--open]
-```
-
-### 配置格式
-
-`crap4lua.config.lua` 返回一个 Lua 表：
-
-```lua
-return {
-  project_name = "示例应用",
-  project_root = ".",
-  source_roots = { "src" },
-  coverage = {
-    lanes = { "unit" },
-    mode = "example",
-    adapter = "adapter.lua",
-  },
-}
-```
+`crap4lua` 是纯 Lua 的 CRAP 热点分析工具。它通过宿主 adapter 收集覆盖率，使用
+`luac -p -l` 解析函数复杂度，并生成 JSON / HTML 报告。

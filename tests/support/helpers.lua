@@ -1,4 +1,4 @@
-require("tests.support.bootstrap")
+local bootstrap = require("tests.support.bootstrap")
 
 local common = require("crap4lua._internal.common")
 
@@ -17,7 +17,7 @@ function helpers.assert_contains(haystack, needle, message)
 end
 
 function helpers.fixture_path(name)
-  return common.resolve_path(common.current_dir(), "tests/fixtures/" .. tostring(name or ""))
+  return common.resolve_path(bootstrap.project_root, "tests/fixtures/" .. tostring(name or ""))
 end
 
 function helpers.with_temp_fixture(files, fn)
