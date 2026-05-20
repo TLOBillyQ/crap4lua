@@ -1,7 +1,0 @@
-*.luac
-.DS_Store
-/tmp/
-*.log
-bin/crap4lua
-bin/crap4lua.exe
-crap4lua

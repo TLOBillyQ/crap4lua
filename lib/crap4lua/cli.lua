@@ -2,8 +2,6 @@ local common = require("crap4lua._internal.common")
 local json_writer = require("crap4lua._internal.json_writer")
 local coverage_mod = require("crap4lua.coverage")
 local analyzer = require("crap4lua.analyzer")
-local viewer_mod = require("crap4lua.viewer")
-
 local cli = {}
 
 local function _help_text(command_name)
@@ -12,9 +10,7 @@ local function _help_text(command_name)
     "  lua " .. command_name .. " report [--lane NAME] [--runner NAME] [--out FILE] [--top N] [--strict-tests] [--project-root DIR]",
     "  lua " .. command_name .. " collect [--lane NAME] [--runner NAME] --out FILE [--project-root DIR]",
     "  lua " .. command_name .. " dry-run [--lane NAME] [--runner NAME] [--config FILE]",
-    "  lua " .. command_name .. " viewer [--in-json FILE] [--out-dir DIR] [--open]",
     "  lua " .. command_name .. " summary [--in-json FILE] [--tier-config FILE] [--lane NAME] [--out FILE] [--top N] [--gate]",
-    "  lua " .. command_name .. "   (bare call = report + viewer --open)",
   }, "\n") .. "\n"
 end
 
@@ -378,11 +374,9 @@ function cli.run(args, env)
   end
 
   local default_report_out = env.default_report_out or "tmp/crap_report.json"
-  local default_view_dir = env.default_view_dir or "tmp/crap_view"
 
   if options.command == nil then
     options.command = "bare"
-    options.open = true
   end
 
   if options.help then
@@ -451,37 +445,6 @@ function cli.run(args, env)
     for _, spec_file in ipairs(spec_files_or_err or {}) do
       stdout:write(tostring(spec_file) .. "\n")
     end
-    return 0
-  end
-
-  if options.command == "viewer" then
-    local out_dir = options.out_dir and resolve(options.out_dir) or resolve(default_view_dir)
-    local report_data
-    if options.in_json and options.in_json ~= "" then
-      local decoded, read_err = _read_json_file(resolve(options.in_json))
-      if not decoded then
-        stderr:write(tostring(read_err) .. "\n")
-        return 1
-      end
-      report_data = decoded
-    else
-      local report, err = _build_report(options, env)
-      if not report then
-        stderr:write(tostring(err) .. "\n")
-        return 1
-      end
-      report_data = report
-    end
-
-    local ok, err = viewer_mod.generate(report_data, out_dir, {
-      open = options.open,
-      open_path = env.open_path,
-    })
-    if not ok then
-      stderr:write(tostring(err) .. "\n")
-      return 1
-    end
-    stdout:write("crap viewer index: " .. common.normalize_path(common.join_path(out_dir, "index.html")) .. "\n")
     return 0
   end
 
@@ -557,17 +520,6 @@ function cli.run(args, env)
     local report = _build_write_report(options, env, out, stderr)
     if not report then return 1 end
     stdout:write("crap report json: " .. common.normalize_path(out) .. "\n")
-
-    local out_dir = resolve(default_view_dir)
-    local ok, err = viewer_mod.generate(report, out_dir, {
-      open = true,
-      open_path = env.open_path,
-    })
-    if not ok then
-      stderr:write(tostring(err) .. "\n")
-      return 1
-    end
-    stdout:write("crap viewer index: " .. common.normalize_path(common.join_path(out_dir, "index.html")) .. "\n")
     return 0
   end
 
