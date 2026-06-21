@@ -21,6 +21,23 @@ local function _shell_quote(value)
   return "'" .. value:gsub("'", "'\\''") .. "'"
 end
 
+local function _is_windows()
+  return package.config:sub(1, 1) == "\\"
+end
+
+local function _windows_path(path)
+  return tostring(path or ""):gsub("/", "\\")
+end
+
+local function _cmd_quote(value)
+  local text = _windows_path(value)
+  return '"' .. text:gsub('"', '""') .. '"'
+end
+
+local function _execute_success(ok, code)
+  return ok == true or ok == 0 or code == 0
+end
+
 local function _capture(command)
   local handle, err = io.popen(command, "r")
   if handle == nil then
@@ -133,18 +150,35 @@ function common.shell_quote(value)
 end
 
 function common.path_exists(path)
+  if _is_windows() then
+    local quoted = _cmd_quote(path)
+    local ok, _, code = os.execute("if exist " .. quoted .. " (exit /b 0) else (exit /b 1)")
+    return _execute_success(ok, code)
+  end
   local ok = os.execute("test -e " .. _shell_quote(path) .. " >/dev/null 2>&1")
-  return ok == true or ok == 0
+  return _execute_success(ok)
 end
 
 function common.command_exists(command_name)
+  if _is_windows() then
+    local ok, _, code = os.execute("where.exe " .. _cmd_quote(command_name) .. " >nul 2>nul")
+    return _execute_success(ok, code)
+  end
   local ok = os.execute("command -v " .. _shell_quote(command_name) .. " >/dev/null 2>&1")
-  return ok == true or ok == 0
+  return _execute_success(ok)
 end
 
 function common.ensure_dir(path)
+  if _is_windows() then
+    local quoted = _cmd_quote(path)
+    local ok, _, code = os.execute("if not exist " .. quoted .. " mkdir " .. quoted)
+    if _execute_success(ok, code) then
+      return true
+    end
+    return nil, "cannot create directory: " .. tostring(path)
+  end
   local ok = os.execute("mkdir -p " .. _shell_quote(path))
-  if ok == true or ok == 0 then
+  if _execute_success(ok) then
     return true
   end
   return nil, "cannot create directory: " .. tostring(path)
@@ -182,8 +216,19 @@ function common.remove_path(path)
   if path == nil or path == "" then
     return true
   end
+  if _is_windows() then
+    local quoted = _cmd_quote(path)
+    local dir_marker = _cmd_quote(_windows_path(path) .. "\\NUL")
+    local command = "if exist " .. dir_marker .. " (rmdir /s /q " .. quoted .. ") else if exist "
+      .. quoted .. " (del /f /q " .. quoted .. ")"
+    local ok, _, code = os.execute(command)
+    if _execute_success(ok, code) then
+      return true
+    end
+    return nil, "cannot remove path: " .. tostring(path)
+  end
   local ok = os.execute("rm -rf " .. _shell_quote(path))
-  if ok == true or ok == 0 then
+  if _execute_success(ok) then
     return true
   end
   return nil, "cannot remove path: " .. tostring(path)
@@ -215,6 +260,23 @@ end
 function common.collect_files(root, extension)
   if not common.path_exists(root) then
     return {}, nil
+  end
+  if _is_windows() then
+    local pattern = "*"
+    if extension ~= nil and extension ~= "" then
+      pattern = "*" .. tostring(extension):gsub('"', "")
+    end
+    local command = "dir /s /b /a:-d " .. _cmd_quote(common.join_path(root, pattern)) .. " 2>nul"
+    local output, err = _capture(command)
+    if output == nil then
+      return nil, err
+    end
+    local files = {}
+    for line in output:gmatch("[^\r\n]+") do
+      files[#files + 1] = common.normalize_path(line)
+    end
+    table.sort(files)
+    return files
   end
   local command = "find " .. _shell_quote(root) .. " -type f"
   if extension ~= nil and extension ~= "" then
