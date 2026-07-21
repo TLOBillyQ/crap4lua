@@ -223,7 +223,7 @@ end
 local function _read_json_file(path)
   local content, read_err = common.read_file(path)
   if not content then return nil, read_err end
-  local json_reader = require("shared.lib.json_reader")
+  local json_reader = require("crap4lua._internal.json_reader")
   local ok_parse, decoded = pcall(json_reader.decode, content)
   if not ok_parse then return nil, "JSON parse error: " .. tostring(decoded) end
   return decoded
