@@ -7,9 +7,9 @@ local cli = {}
 local function _help_text(command_name)
   return table.concat({
     "用法 / Usage:",
-    "  lua " .. command_name .. " report [--lane NAME] [--runner NAME] [--out FILE] [--top N] [--strict-tests] [--project-root DIR]",
-    "  lua " .. command_name .. " collect [--lane NAME] [--runner NAME] --out FILE [--project-root DIR]",
-    "  lua " .. command_name .. " dry-run [--lane NAME] [--runner NAME] [--config FILE]",
+    "  lua " .. command_name .. " report [--lane NAME] [--out FILE] [--top N] [--strict-tests] [--project-root DIR]",
+    "  lua " .. command_name .. " collect [--lane NAME] --out FILE [--project-root DIR]",
+    "  lua " .. command_name .. " dry-run [--lane NAME] [--config FILE]",
     "  lua " .. command_name .. " summary [--in-json FILE] [--tier-config FILE] [--lane NAME] [--out FILE] [--top N] [--gate]",
   }, "\n") .. "\n"
 end
@@ -117,11 +117,7 @@ end
 local function _resolve_adapter(raw_coverage, config_dir, lane, runner)
   local adapter_setting = nil
   if runner and runner ~= "" then
-    if runner == "busted" then
-      adapter_setting = "busted_adapter.lua"
-    else
-      return nil, "unsupported runner: " .. tostring(runner)
-    end
+    return nil, "unsupported runner: " .. tostring(runner)
   end
 
   if adapter_setting == nil and type(raw_coverage.lanes) == "table"

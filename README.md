@@ -7,9 +7,9 @@ complexity from `luac -p -l` output, and generates JSON or static HTML reports.
 ## CLI
 
 ```sh
-lua tools/quality/crap.lua report [--lane NAME] [--runner NAME] [--out FILE] [--top N]
-lua tools/quality/crap.lua collect [--lane NAME] [--runner NAME] --out FILE
-lua tools/quality/crap.lua dry-run [--lane NAME] [--runner NAME]
+lua tools/quality/crap.lua report [--lane NAME] [--out FILE] [--top N]
+lua tools/quality/crap.lua collect [--lane NAME] --out FILE
+lua tools/quality/crap.lua dry-run [--lane NAME]
 lua tools/quality/crap.lua viewer --in-json FILE --out-dir DIR [--open]
 lua tools/quality/crap.lua summary --in-json FILE [--tier-config FILE] [--gate]
 ```
