@@ -77,6 +77,68 @@ function analyzer.analyze_file(abs_path, opts)
   return analyzer.parse_luac_output(output)
 end
 
+-- Number of files passed to a single luac invocation. Keeps argv well
+-- below OS limits while still amortizing process startup over many files.
+local LUAC_BATCH_SIZE = 100
+
+-- Analyze many files with far fewer luac subprocesses than one per file.
+-- Returns parsed_map (abs_path -> functions array) and errors
+-- (abs_path -> message). Files that a batch run could not produce output
+-- for (e.g. syntax errors aborting the batch) are retried individually so
+-- error messages match analyze_file exactly.
+function analyzer.analyze_files(abs_paths, opts)
+  opts = opts or {}
+  local luac_cmd = opts.luac_cmd or "luac"
+  local parsed_map = {}
+  local errors = {}
+
+  local index = 1
+  while index <= #abs_paths do
+    local chunk = {}
+    local chunk_end = math.min(index + LUAC_BATCH_SIZE - 1, #abs_paths)
+    for j = index, chunk_end do
+      chunk[#chunk + 1] = abs_paths[j]
+    end
+    index = chunk_end + 1
+
+    local command = luac_cmd .. " -p -l"
+    for _, path in ipairs(chunk) do
+      command = command .. " " .. common.shell_quote(path)
+    end
+    command = command .. " 2>&1"
+
+    local grouped = {}
+    local handle = io.popen(command)
+    if handle then
+      local output = handle:read("*a") or ""
+      handle:close()
+      for _, fn in ipairs(analyzer.parse_luac_output(output)) do
+        local bucket = grouped[fn.source_path]
+        if bucket == nil then
+          bucket = {}
+          grouped[fn.source_path] = bucket
+        end
+        bucket[#bucket + 1] = fn
+      end
+    end
+
+    for _, path in ipairs(chunk) do
+      if grouped[path] then
+        parsed_map[path] = grouped[path]
+      else
+        local parsed, err = analyzer.analyze_file(path, opts)
+        if parsed then
+          parsed_map[path] = parsed
+        else
+          errors[path] = err
+        end
+      end
+    end
+  end
+
+  return parsed_map, errors
+end
+
 local function _relative_source_path(abs_path, project_root)
   local prefix = common.normalize_path(project_root):gsub("/+$", "") .. "/"
   local normalized = common.normalize_path(abs_path)
@@ -137,12 +199,14 @@ function analyzer.build_report(opts)
   local module_map = {}
   local func_id = 0
 
+  local parsed_map, parse_errors = analyzer.analyze_files(all_files, { luac_cmd = luac_cmd })
+
   for _, abs_path in ipairs(all_files) do
     local rel_path = _relative_source_path(abs_path, project_root)
     local file_hits = line_hits[rel_path] or {}
-    local parsed, parse_err = analyzer.analyze_file(abs_path, { luac_cmd = luac_cmd })
+    local parsed = parsed_map[abs_path]
     if parsed == nil then
-      io.stderr:write("skip " .. rel_path .. ": " .. tostring(parse_err) .. "\n")
+      io.stderr:write("skip " .. rel_path .. ": " .. tostring(parse_errors[abs_path]) .. "\n")
       goto continue_file
     end
 

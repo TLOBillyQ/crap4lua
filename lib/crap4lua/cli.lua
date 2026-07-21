@@ -49,6 +49,25 @@ local function _is_array_table(value)
   return type(value) == "table" and #value > 0
 end
 
+local _FLAG_HANDLERS = {
+  ["--config"] = { value = true, set = function(o, v) o.config = v end },
+  ["--out"] = { value = true, set = function(o, v) o.out = v end },
+  ["--response-json"] = { value = true, set = function(o, v) o.out = v end },
+  ["--out-dir"] = { value = true, set = function(o, v) o.out_dir = v end },
+  ["--in-json"] = { value = true, set = function(o, v) o.in_json = v end },
+  ["--project-root"] = { value = true, set = function(o, v) o.project_root = v end },
+  ["--tier-config"] = { value = true, set = function(o, v) o.tier_config = v end },
+  ["--lane"] = { value = true, set = function(o, v)
+    o.lanes[#o.lanes + 1] = v
+    o.lane = v
+  end },
+  ["--runner"] = { value = true, set = function(o, v) o.runner = v end },
+  ["--top"] = { value = true, set = function(o, v) o.top = common.to_integer(v) end },
+  ["--strict-tests"] = { set = function(o) o.strict_tests = true end },
+  ["--gate"] = { set = function(o) o.gate = true end },
+  ["--open"] = { set = function(o) o.open = true end },
+}
+
 local function _parse_args(args)
   local options = {
     command = nil, config = nil, out = nil, out_dir = nil,
@@ -68,37 +87,20 @@ local function _parse_args(args)
     local token = args[index]
     if token == "--help" or token == "-h" then
       options.help = true
-    elseif token == "--config" then
-      index = index + 1; options.config = args[index]
-    elseif token == "--out" or token == "--response-json" then
-      index = index + 1; options.out = args[index]
-    elseif token == "--out-dir" then
-      index = index + 1; options.out_dir = args[index]
-    elseif token == "--in-json" then
-      index = index + 1; options.in_json = args[index]
-    elseif token == "--project-root" then
-      index = index + 1; options.project_root = args[index]
-    elseif token == "--tier-config" then
-      index = index + 1; options.tier_config = args[index]
-    elseif token == "--lane" then
       index = index + 1
-      local lane_val = args[index]
-      options.lanes[#options.lanes + 1] = lane_val
-      options.lane = lane_val
-    elseif token == "--runner" then
-      index = index + 1; options.runner = args[index]
-    elseif token == "--top" then
-      index = index + 1; options.top = common.to_integer(args[index])
-    elseif token == "--strict-tests" then
-      options.strict_tests = true
-    elseif token == "--gate" then
-      options.gate = true
-    elseif token == "--open" then
-      options.open = true
     else
-      error("unknown flag: " .. tostring(token))
+      local handler = _FLAG_HANDLERS[token]
+      if handler == nil then
+        error("unknown flag: " .. tostring(token))
+      end
+      if handler.value then
+        handler.set(options, args[index + 1])
+        index = index + 2
+      else
+        handler.set(options)
+        index = index + 1
+      end
     end
-    index = index + 1
   end
   return options
 end
@@ -192,7 +194,7 @@ local function _collect_coverage(options, env)
 
   return {
     project_root = project_root,
-    project_name = raw.project_name or "Monopoly",
+    project_name = raw.project_name or "Project",
     source_roots = source_roots,
     coverage_result = collect_result,
   }, nil

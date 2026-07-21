@@ -119,10 +119,6 @@ function common.resolve_path(base, path)
   return common.join_path(base, path)
 end
 
-function common.resolve_cli_path(base, path)
-  return common.resolve_path(base, path)
-end
-
 function common.parent_dir(path)
   local normalized = common.normalize_path(path):gsub("/+$", "")
   local parent = normalized:match("^(.*)/[^/]+$")

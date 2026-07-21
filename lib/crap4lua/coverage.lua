@@ -19,12 +19,12 @@ local function _resolve_hit_lines(line_hits, relative_path)
   return hit_lines
 end
 
-local function _is_tracked_source(relative_path, tracked_sources, tracked_roots)
+local function _is_tracked_source(relative_path, tracked_sources, root_patterns, tracked_roots)
   if tracked_sources[relative_path] == true then
     return true
   end
-  for _, root in ipairs(tracked_roots or {}) do
-    if relative_path == root or relative_path:match("^" .. root:gsub("%.", "%%.") .. "/") then
+  for i, pattern in ipairs(root_patterns) do
+    if relative_path == tracked_roots[i] or relative_path:match(pattern) then
       return true
     end
   end
@@ -35,6 +35,10 @@ local function _make_hook(project_root, tracked_sources, tracked_roots, line_hit
   local function_cache = setmetatable({}, { __mode = "k" })
   local getinfo = debug_api.getinfo
   local relative_to = common.relative_to
+  local root_patterns = {}
+  for index, root in ipairs(tracked_roots or {}) do
+    root_patterns[index] = "^" .. root:gsub("%.", "%%.") .. "/"
+  end
 
   return function(_, line_no)
     local info = getinfo(2, "f")
@@ -60,7 +64,7 @@ local function _make_hook(project_root, tracked_sources, tracked_roots, line_hit
 
     local normalized = relative_to(project_root, source_info.source)
     normalized = normalized:gsub("^%./", "")
-    if not _is_tracked_source(normalized, tracked_sources, tracked_roots) then
+    if not _is_tracked_source(normalized, tracked_sources, root_patterns, tracked_roots) then
       function_cache[func] = false
       return
     end

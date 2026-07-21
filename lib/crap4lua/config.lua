@@ -72,7 +72,7 @@ function config.load(path, env)
   env = env or {}
   local cwd = common.current_dir()
   local default_path = env.default_config_path or "crap4lua.config.lua"
-  local config_path = common.resolve_cli_path(cwd, path or default_path)
+  local config_path = common.resolve_path(cwd, path or default_path)
   if not common.path_exists(config_path) then
     return nil, "crap4lua config not found: " .. tostring(config_path)
   end
