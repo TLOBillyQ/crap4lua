@@ -1,4 +1,6 @@
 .PHONY: test
 
+LUA ?= lua
+
 test:
-	lua tests/run.lua
+	$(LUA) tests/run.lua

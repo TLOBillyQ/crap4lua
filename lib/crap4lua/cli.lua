@@ -91,7 +91,7 @@ local function _parse_args(args)
     else
       local handler = _FLAG_HANDLERS[token]
       if handler == nil then
-        error("unknown flag: " .. tostring(token))
+        error("unknown flag: " .. tostring(token), 0)
       end
       if handler.value then
         handler.set(options, args[index + 1])
@@ -151,7 +151,7 @@ local function _resolve_collect_lanes(raw_coverage, cli_lanes)
   if _is_array_table(cli_lanes) then return _copy_array(cli_lanes) end
   local lanes_cfg = raw_coverage and raw_coverage.lanes or nil
   if type(lanes_cfg) == "table" then
-    if lanes_cfg.behavior then return { "behavior" } end
+    if lanes_cfg.default then return { "default" } end
     local keys = common.sorted_keys(lanes_cfg)
     if #keys > 0 then return { keys[1] } end
   end
@@ -301,7 +301,7 @@ end
 
 local function _print_coverage_table(tier_stats, uncategorized, options, stdout)
   local lane_label = _is_array_table(options.lanes)
-    and table.concat(options.lanes, "+") or "behavior"
+    and table.concat(options.lanes, "+") or "default"
   stdout:write("\n Coverage summary (lane: " .. lane_label .. ")\n")
   stdout:write(string.rep("=", 70) .. "\n")
   stdout:write(string.format("%-16s %6s %9s %8s %7s %6s  %s\n",
@@ -363,7 +363,11 @@ function cli.run(args, env)
   local cwd = env.cwd or common.current_dir()
   local tmp_root = _resolve_tmp_root(env)
   local resolve = function(path) return _resolve_cli_path(cwd, path, tmp_root) end
-  local options = _parse_args(args or {})
+  local ok_parse, options = pcall(_parse_args, args or {})
+  if not ok_parse then
+    stderr:write(tostring(options) .. "\n")
+    return 1
+  end
 
   if options.config then
     options.config = resolve(options.config)
@@ -426,7 +430,7 @@ function cli.run(args, env)
     end
     local config_dir = common.parent_dir(config_path) or cwd
     local raw_coverage = raw.coverage or {}
-    local adapter, adapter_err = _resolve_adapter(raw_coverage, config_dir, options.lane or "behavior", options.runner)
+    local adapter, adapter_err = _resolve_adapter(raw_coverage, config_dir, options.lane or "default", options.runner)
     if not adapter then
       stderr:write(tostring(adapter_err) .. "\n")
       return 1
@@ -435,7 +439,7 @@ function cli.run(args, env)
       stderr:write("adapter does not support dry-run discover_specs(lane)\n")
       return 1
     end
-    local ok, spec_files_or_err = pcall(adapter.discover_specs, options.lane or "behavior")
+    local ok, spec_files_or_err = pcall(adapter.discover_specs, options.lane or "default")
     if not ok then
       stderr:write(tostring(spec_files_or_err) .. "\n")
       return 1
