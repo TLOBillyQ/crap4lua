@@ -234,7 +234,7 @@ writing to streams.
 
 ## Compatibility notes
 
-- **Breaking (landing-alignment branch)**: risk bands are now the upstream
+- **Breaking**: risk bands are now the upstream
   `1–5 low / 5–30 moderate / 30+ high` (was `8+ warning / 30+ critical`); the
   JSON summary fields `critical_count`/`warning_count` are renamed
   `high_count`/`moderate_count` and joined by `na_count`. `--gate` trips exit
@@ -282,6 +282,6 @@ make test LUA=lua5.4 # override the interpreter if needed
 库本身不含任何宿主专属路径；接入方式见上文 "Integrating into a new project (eggy)"
 一节：宿主需提供 config 文件、adapter 和一个薄入口脚本，并以 luarocks 安装 luacheck。
 
-破坏性变更（landing-alignment 分支）：风险带对齐上游 `1–5 low / 5–30 moderate / 30+ high`；
+破坏性变更：风险带对齐上游 `1–5 low / 5–30 moderate / 30+ high`；
 `--gate` 触发时退出码 2，并检查 max CRAP 是否超过 `--gate-threshold`（默认 5.0）；
 缺失覆盖率的函数 CRAP 为 `null`（N/A 沉底，绝不当 0）。
