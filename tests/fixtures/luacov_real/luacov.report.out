@@ -1,0 +1,65 @@
+==============================================================================
+src/example.lua
+==============================================================================
+ 1 local example = {}
+
+   -- A simple 1-liner: CC=1, fully covered by tests.
+ 1 function example.trivial()
+ 1   return 42
+   end
+
+   -- A branching function with partial coverage: the else branch is never taken.
+ 1 function example.branchy(flag)
+ 1   if flag then
+ 1     return "yes"
+     else
+*0     return "no"
+     end
+   end
+
+   -- A looping function with high coverage: loop runs 5 times.
+ 1 function example.loopy(n)
+ 1   local total = 0
+ 6   for i = 1, n do
+ 5     total = total + i
+     end
+ 1   return total
+   end
+
+   -- An intentionally uncovered function: never called, CRAP = N/A.
+ 1 function example.untouched()
+     if true then
+*0     return "unreachable"
+     else
+*0     return "unreachable-too"
+     end
+   end
+
+ 1 return example
+
+==============================================================================
+test_example.lua
+==============================================================================
+ 1 local example = require("src.example")
+
+   -- Exercise trivial (CC=1): fully covered.
+ 1 assert(example.trivial() == 42)
+
+   -- Exercise branchy with flag=true: covers the 'then' branch but not 'else'.
+ 1 assert(example.branchy(true) == "yes")
+
+   -- Exercise loopy: loop executes n=5 times.
+ 1 assert(example.loopy(5) == 15)
+
+   -- untouched() is NEVER called, producing a zero-coverage function.
+
+==============================================================================
+Summary
+==============================================================================
+
+File             Hits Missed Coverage
+-------------------------------------
+src/example.lua  13   3      81.25%
+test_example.lua 4    0      100.00%
+-------------------------------------
+Total            17   3      85.00%

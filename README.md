@@ -102,6 +102,74 @@ return {
 If no report exists after the run, coverage is **unavailable**: every CRAP
 score is `null` (never 0), shown as `N/A`, sorted last.
 
+### Real luacov output format (parser contract)
+
+crap4lua parses the **default reporter** output of luacov (the format produced
+by `luacov` with no custom reporter configured). The adapter-runner is
+responsible for producing this exact format.  Key characteristics verified
+against real luacov 0.17.0 output:
+
+- **Section structure**: each source file appears in its own block delimited by
+  separator lines of 78 `=` characters (`^=+$`).
+  ```
+  ==============================================================================
+  <path as luacov saw it>
+  ==============================================================================
+  ```
+- **Hit-count column**: right-aligned; width grows with the largest hit count
+  (minimum 2 characters for `*0` to fit).  The column is followed by one
+  separator space, then the source line **verbatim** (including its original
+  indentation).
+- **Missed executable lines**: displayed as `*0` at the count column position —
+  no leading spaces.  Example: `*0     return 0`.
+- **Non-executable lines** (blank lines, `end`, `else`, comments): NO count
+  prefix — the count column is empty (padding spaces), then the separator space,
+  then the source line.  These lines advance the line counter but are NOT
+  recorded as executable.
+- **Summary section**: always the last block in the report, headed by
+  `Summary` as the "path" name.  crap4lua stops parsing when it encounters
+  `Summary` — the coverage table below it is not consumed.
+- **Path shapes**: luacov records paths as seen at `require()` time — they may
+  be **relative** (e.g. `src/foo.lua`) or **absolute** (e.g.
+  `/Users/.../src/foo.lua`).  crap4lua normalizes both to project-root-relative
+  keys at collection time.
+
+### Installing luacov for Lua 5.4
+
+The adapter-runner must instrument the test run with luacov and then invoke
+the `luacov` command-line tool to generate `luacov.report.out`.  Install
+method for Lua 5.4 (the only supported runtime):
+
+```sh
+luarocks --lua-version=5.4 --lua-dir=/opt/homebrew/opt/lua@5.4 install luacov
+```
+
+To make `require("luacov")` work under `lua5.4`:
+
+```sh
+export LUA_PATH="/Users/$USER/.luarocks/share/lua/5.4/?.lua;$LUA_PATH"
+```
+
+A typical adapter `run()` implementation:
+
+```lua
+run = function(suites, opts)
+  -- 1. Run the test suite under luacov (produces luacov.stats.out):
+  os.execute("cd " .. project_root .. " && lua5.4 -lluacov test_runner.lua")
+
+  -- 2. Generate the report (reads luacov.stats.out, writes luacov.report.out):
+  os.execute("cd " .. project_root .. " && luacov")
+
+  -- 3. Move the report to where crap4lua expects it:
+  os.rename(project_root .. "/luacov.report.out", opts.report_path)
+
+  return { total = N, failed = false, failures = {} }
+end
+```
+
+crap4lua's `collect` deletes any stale `luacov.report.out` before invoking
+`run()`, so the adapter does not need to worry about leftover artifacts.
+
 ## Config Format
 
 The host places a `crap4lua.config.lua` (any path works; pass `--config`):

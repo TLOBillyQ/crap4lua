@@ -34,8 +34,8 @@ end
 --   ====... (rule)
 --   <path as luacov saw it>
 --   ====... (rule)
---   one line per source line: right-aligned hit count (`***0` for a zero-hit
---   executable line, blank prefix for non-executable lines), then the source.
+--   one line per source line: right-aligned hit count (`*0` for a zero-hit
+--   executable line, empty count column for non-executable lines), then the source line verbatim.
 -- Returns files[report_path] = { exec = {line=true}, hit = {line=true} }.
 function coverage.parse_luacov_report(text)
   local files = {}
@@ -51,12 +51,18 @@ function coverage.parse_luacov_report(text)
       elseif state == "expect_data_rule" then
         state = "data"
       else
-        state = "idle"
+        -- A separator inside a data section closes it AND opens the next
+        -- file section: go straight to expect_path so the next non-separator
+        -- line is captured as that section's path.
+        state = "expect_path"
         current = nil
       end
     elseif state == "expect_path" then
       local path = line:match("^%s*(.-)%s*$")
       if path ~= "" then
+        -- luacov's default reporter always places the Summary section last;
+        -- its content is a coverage table, not per-line hit data.
+        if path == "Summary" then break end
         current = { exec = {}, hit = {} }
         files[path] = current
         state = "expect_data_rule"
