@@ -21,6 +21,44 @@ lua crap.lua dry-run [--lane NAME]
 lua crap.lua summary --in-json FILE [--tier-config FILE] [--gate]
 ```
 
+## Upstream Alignment (对齐上游)
+
+`crap4lua` follows the "Lua faithful implementation of the upstream spec"
+doctrine: whatever crap4clj / crap4go / crap4java do identically is the spec
+and is copied verbatim; anything different is a deliberate deviation, recorded
+here with its reason. Cross-repo decisions live as ADRs in the luatools notes
+repo (`projects/luatools/docs/adr/`).
+
+**Aligned invariants (对齐不变量)**
+
+- CRAP formula `CC² × (1 − cov)³ + CC`; missing coverage yields an empty
+  score shown as `N/A` — never treated as 0 (JSON `null`, sorted last).
+- Risk bands `1–5 low / 5–30 moderate / 30+ high` (landing in progress on
+  this branch: replacing the local `8+ warning` band).
+- Five-stage skeleton: find sources → parse function boundaries → compute CC
+  → attribute coverage to functions → sort and print.
+- `collect` deletes stale coverage artifacts before regenerating (landing in
+  progress on this branch).
+- Coverage comes only from parsing the ecosystem-standard tool's fixed
+  artifact — **luacov** is the sole coverage path (ADR-0003; the local
+  `debug.sethook` adapter contract is being removed on this branch).
+- Cyclomatic complexity computed from a real Lua AST (ADR-0001: luacheck
+  parser via LuaRocks replaces `luac -p -l` bytecode opcode counting).
+
+**Deliberate deviations (有意偏离)**
+
+- JSON report output (all three upstreams print text tables only) — CI and
+  visualization consumption.
+- Command split `collect / report / summary / dry-run` instead of one
+  end-to-end analyze run.
+- `summary --gate` quality gate — the correct port of crap4java's exit-2
+  gating, but with a **configurable** threshold (default 5.0; java hardcodes
+  8.0, recorded upstream as a lesson).
+
+**Breaking changes on this branch**: the risk-band tightening (5 vs 8) and
+the luacov-only coverage path both change host-visible behavior — see
+"Host Adapter Contract" for the migration path.
+
 ## Host Adapter Contract
 
 The host supplies an adapter table (usually via a Lua file referenced from the
