@@ -1,66 +1,24 @@
-local function is_absolute(path)
-  path = tostring(path or "")
-  return path:sub(1, 1) == "/" or path:match("^%a:[/\\]") ~= nil
-end
+-- Test entry point (ADR-0005: 4lua 工具链统一 luaunit): discovers
+-- tests/unit/test_*.lua, loads each file's returned luaunit test table
+-- (methods named test_*), and runs them all in a single luaunit suite.
+-- Usage: `lua tests/run.lua`（依赖经 LUA_PATH 注入，见 Makefile）。
 
-local function normalize(path)
-  path = tostring(path or ""):gsub("\\", "/")
-  local prefix = ""
-  if path:sub(1, 1) == "/" then
-    prefix = "/"
-    path = path:sub(2)
-  elseif path:match("^%a:/") then
-    prefix = path:sub(1, 3)
-    path = path:sub(4)
-  end
-  local parts = {}
-  for part in path:gmatch("[^/]+") do
-    if part == ".." then
-      if #parts > 0 then
-        parts[#parts] = nil
-      elseif prefix == "" then
-        parts[#parts + 1] = part
-      end
-    elseif part ~= "." and part ~= "" then
-      parts[#parts + 1] = part
-    end
-  end
-  local joined = table.concat(parts, "/")
-  if prefix == "" then
-    return joined == "" and "." or joined
-  end
-  return joined == "" and prefix:gsub("/$", "") or (prefix .. joined)
-end
-
-local function current_dir()
-  local pwd = os.getenv("PWD")
-  if pwd and pwd ~= "" then
-    return pwd
-  end
-  local handle = assert(io.popen("pwd", "r"))
-  local output = handle:read("*l")
-  handle:close()
-  return output
-end
-
-local function dirname(path)
-  path = normalize(path):gsub("/+$", "")
-  return path:match("^(.*)/[^/]+$") or "."
-end
-
-local function script_path()
+local function script_dir()
   local source = debug.getinfo(1, "S").source
   if source:sub(1, 1) == "@" then
     source = source:sub(2)
   end
-  if not is_absolute(source) then
-    source = current_dir() .. "/" .. source
+  source = source:gsub("\\", "/")
+  if source:sub(1, 1) ~= "/" then
+    local pipe = assert(io.popen("pwd", "r"))
+    source = pipe:read("*l") .. "/" .. source
+    pipe:close()
   end
-  return normalize(source)
+  return source:match("^(.*)/[^/]+$") or "."
 end
 
-local test_root = dirname(script_path())
-local project_root = dirname(test_root)
+local test_root = script_dir()
+local project_root = test_root:match("^(.*)/[^/]+$") or "."
 
 package.path = table.concat({
   project_root .. "/?.lua",
@@ -71,15 +29,41 @@ package.path = table.concat({
 }, ";")
 
 local bootstrap = require("tests.support.bootstrap")
-local harness = require("tests.support.harness")
-
 bootstrap.install_package_paths()
 
-local suites = {
-  require("tests.unit.test_analyzer"),
-  require("tests.unit.test_bridge"),
-  require("tests.unit.test_coverage"),
-  require("tests.unit.test_config"),
-}
+local function fail(message)
+  io.stderr:write(tostring(message) .. "\n")
+  os.exit(1)
+end
 
-harness.run_all(suites)
+local pipe = assert(io.popen('find "' .. test_root .. '/unit" -type f -name "test_*.lua"', "r"))
+local files = {}
+for line in pipe:lines() do
+  files[#files + 1] = line
+end
+pipe:close()
+table.sort(files)
+
+if #files == 0 then
+  fail("no test files discovered under " .. test_root .. "/unit")
+end
+
+local instances = {}
+for _, file in ipairs(files) do
+  local chunk, load_err = loadfile(file)
+  if not chunk then
+    fail("failed to load " .. file .. ": " .. tostring(load_err))
+  end
+  local ok, suite = pcall(chunk)
+  if not ok then
+    fail("failed to execute " .. file .. ": " .. tostring(suite))
+  end
+  if type(suite) ~= "table" then
+    fail(file .. " did not return a luaunit test table")
+  end
+  instances[#instances + 1] = { file:match("([^/]+)%.lua$"), suite }
+end
+
+local lu = require("luaunit")
+local runner = lu.LuaUnit.new()
+os.exit(runner:runSuiteByInstancesNoCmdLineParsing(instances) > 0 and 1 or 0)

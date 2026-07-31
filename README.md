@@ -245,12 +245,18 @@ return {
 - [luacheck](https://github.com/lunarmodules/luacheck)（`luarocks install luacheck`）
 - 宿主测试可在 [luacov](https://github.com/lunarmodules/luacov) 下运行
   （仅覆盖率路径需要；复杂度分析无需此项，缺覆盖率时分数为 N/A）
+- [luaunit](https://github.com/bluebird75/luaunit)（仅运行本仓测试套件需要；
+  `luarocks --lua-version=5.4 --lua-dir=/opt/homebrew/opt/lua@5.4 install luaunit`）
 
 ## 测试
 
+测试套件基于 luaunit（4lua 工具链统一测试框架，ADR-0005），入口为
+`tests/run.lua`——自动发现 `tests/unit/test_*.lua` 并在单个 luaunit
+套件下运行。
+
 ```sh
-make test            # 使用 `lua`
-make test LUA=lua5.4 # 如需覆盖解释器
+make test            # 使用 Lua 5.4（/opt/homebrew/opt/lua@5.4/bin/lua5.4）
+make test LUA=lua    # 如需覆盖解释器
 ```
 
 ---

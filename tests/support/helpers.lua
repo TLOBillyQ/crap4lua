@@ -4,18 +4,6 @@ local common = require("crap4lua._internal.common")
 
 local helpers = {}
 
-function helpers.assert_eq(actual, expected, message)
-  if actual ~= expected then
-    error((message or "values differ") .. "\nexpected: " .. tostring(expected) .. "\nactual: " .. tostring(actual))
-  end
-end
-
-function helpers.assert_contains(haystack, needle, message)
-  if tostring(haystack):find(tostring(needle), 1, true) == nil then
-    error(message or ("expected to find `" .. tostring(needle) .. "`"))
-  end
-end
-
 function helpers.fixture_path(name)
   return common.resolve_path(bootstrap.project_root, "tests/fixtures/" .. tostring(name or ""))
 end
