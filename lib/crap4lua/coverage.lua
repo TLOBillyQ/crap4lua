@@ -1,6 +1,12 @@
+-- Coverage collection: the host adapter runs its test suite under luacov,
+-- crap4lua then parses the standard luacov report artifact (ADR-0003).
+-- No coverage mechanism of our own — the debug.sethook adapter contract is
+-- gone; only the ecosystem tool's fixed output is interpreted.
 local common = require("crap4lua._internal.common")
 
 local coverage = {}
+
+local DEFAULT_REPORT_PATH = "luacov.report.out"
 
 local function _silent_reporter()
   return {
@@ -8,71 +14,6 @@ local function _silent_reporter()
     case_fail = function() end,
     finish = function() end,
   }
-end
-
-local function _resolve_hit_lines(line_hits, relative_path)
-  local hit_lines = line_hits[relative_path]
-  if hit_lines == nil then
-    hit_lines = {}
-    line_hits[relative_path] = hit_lines
-  end
-  return hit_lines
-end
-
-local function _is_tracked_source(relative_path, tracked_sources, root_patterns, tracked_roots)
-  if tracked_sources[relative_path] == true then
-    return true
-  end
-  for i, pattern in ipairs(root_patterns) do
-    if relative_path == tracked_roots[i] or relative_path:match(pattern) then
-      return true
-    end
-  end
-  return false
-end
-
-local function _make_hook(project_root, tracked_sources, tracked_roots, line_hits, debug_api)
-  local function_cache = setmetatable({}, { __mode = "k" })
-  local getinfo = debug_api.getinfo
-  local relative_to = common.relative_to
-  local root_patterns = {}
-  for index, root in ipairs(tracked_roots or {}) do
-    root_patterns[index] = "^" .. root:gsub("%.", "%%.") .. "/"
-  end
-
-  return function(_, line_no)
-    local info = getinfo(2, "f")
-    local func = info and info.func
-    if func == nil then
-      return
-    end
-
-    local cached = function_cache[func]
-    if cached then
-      cached[line_no] = true
-      return
-    end
-    if cached == false then
-      return
-    end
-
-    local source_info = getinfo(func, "S")
-    if source_info == nil or source_info.source == nil then
-      function_cache[func] = false
-      return
-    end
-
-    local normalized = relative_to(project_root, source_info.source)
-    normalized = normalized:gsub("^%./", "")
-    if not _is_tracked_source(normalized, tracked_sources, root_patterns, tracked_roots) then
-      function_cache[func] = false
-      return
-    end
-
-    local hit_lines = _resolve_hit_lines(line_hits, normalized)
-    function_cache[func] = hit_lines
-    hit_lines[line_no] = true
-  end
 end
 
 local function _resolve_adapter(opts)
@@ -86,69 +27,97 @@ local function _resolve_adapter(opts)
   if type(adapter.run) ~= "function" then
     error("coverage adapter requires run(suites, opts)")
   end
-  return {
-    resolve_suites = adapter.resolve_suites,
-    run = adapter.run,
-    debug_api = adapter.debug_api or debug,
-  }
+  return adapter
+end
+
+-- Parses luacov's default reporter output. Layout per file section:
+--   ====... (rule)
+--   <path as luacov saw it>
+--   ====... (rule)
+--   one line per source line: right-aligned hit count (`***0` for a zero-hit
+--   executable line, blank prefix for non-executable lines), then the source.
+-- Returns files[report_path] = { exec = {line=true}, hit = {line=true} }.
+function coverage.parse_luacov_report(text)
+  local files = {}
+  local current = nil
+  -- idle -> (rule) expect_path -> (path line) expect_data_rule -> (rule) data;
+  -- a rule inside data closes the section back to idle.
+  local state = "idle"
+
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    if line:match("^=+%s*$") then
+      if state == "idle" then
+        state = "expect_path"
+      elseif state == "expect_data_rule" then
+        state = "data"
+      else
+        state = "idle"
+        current = nil
+      end
+    elseif state == "expect_path" then
+      local path = line:match("^%s*(.-)%s*$")
+      if path ~= "" then
+        current = { exec = {}, hit = {} }
+        files[path] = current
+        state = "expect_data_rule"
+      end
+    elseif state == "data" then
+      -- luacov emits every source line in order; track our own counter.
+      local token = line:match("^%s*(%*+%s*0)%s") or line:match("^%s*(%d+)%s")
+      if token then
+        current._line = (current._line or 0) + 1
+        current.exec[current._line] = true
+        local n = tonumber((token:gsub("%*", "")))
+        if n and n > 0 then
+          current.hit[current._line] = true
+        end
+      else
+        -- Non-executable (blank-prefix) lines still advance the counter.
+        current._line = (current._line or 0) + 1
+      end
+    end
+  end
+
+  for _, file in pairs(files) do
+    file._line = nil
+  end
+  return files
+end
+
+local function _remap_paths(files, project_root)
+  -- luacov records paths as seen at test time (relative to wherever the host
+  -- ran, or absolute). Normalize to project-root-relative keys.
+  local remapped = {}
+  local prefix = common.normalize_path(project_root):gsub("/+$", "") .. "/"
+  for path, data in pairs(files) do
+    local normalized = common.normalize_path(path):gsub("^%./", "")
+    if normalized:sub(1, #prefix) == prefix then
+      normalized = normalized:sub(#prefix + 1)
+    end
+    remapped[normalized] = data
+  end
+  return remapped
 end
 
 function coverage.collect(opts)
   opts = opts or {}
-  local deps = _resolve_adapter(opts)
+  local adapter = _resolve_adapter(opts)
   local project_root = common.normalize_path(opts.project_root)
-  local tracked_sources = {}
-  for _, source_path in ipairs(opts.tracked_sources or {}) do
-    tracked_sources[common.normalize_path(source_path)] = true
-  end
-  local tracked_roots = {}
-  for _, root in ipairs(opts.source_roots or {}) do
-    local normalized_root = common.normalize_path(root):gsub("^%./", ""):gsub("/+$", "")
-    if normalized_root ~= "" then
-      tracked_roots[#tracked_roots + 1] = normalized_root
-    end
-  end
+  local report_path = opts.report_path
+    or common.join_path(project_root, DEFAULT_REPORT_PATH)
 
-  local line_hits = {}
+  -- Upstream discipline: delete stale coverage artifacts before regenerating.
+  os.remove(report_path)
+
   local lane_results = {}
-
   for _, lane in ipairs(opts.lanes or { "default" }) do
-    local suites, resolved_mode = deps.resolve_suites(lane, opts.mode)
-    local hook = _make_hook(project_root, tracked_sources, tracked_roots, line_hits, deps.debug_api)
-    local original_create = coroutine.create
-    local original_wrap = coroutine.wrap
-
-    local function _patched_create(fn)
-      local co = original_create(fn)
-      deps.debug_api.sethook(co, hook, "l")
-      return co
-    end
-
-    local function _patched_wrap(fn)
-      local co = original_create(fn)
-      deps.debug_api.sethook(co, hook, "l")
-      return function(...)
-        local results = table.pack(coroutine.resume(co, ...))
-        if not results[1] then error(results[2], 0) end
-        return table.unpack(results, 2, results.n)
-      end
-    end
-
-    local result = deps.run(suites or {}, {
+    local suites, resolved_mode = adapter.resolve_suites(lane, opts.mode)
+    local result = adapter.run(suites or {}, {
       mode = resolved_mode or opts.mode or lane,
       capture_logs = true,
       reporter = _silent_reporter(),
       raise_on_failure = false,
-      before_case = function()
-        deps.debug_api.sethook(hook, "l")
-        coroutine.create = _patched_create
-        coroutine.wrap = _patched_wrap
-      end,
-      after_case = function()
-        deps.debug_api.sethook()
-        coroutine.create = original_create
-        coroutine.wrap = original_wrap
-      end,
+      report_path = report_path,
     }) or {}
 
     lane_results[#lane_results + 1] = {
@@ -161,11 +130,25 @@ function coverage.collect(opts)
     }
   end
 
-  deps.debug_api.sethook()
+  local coverage_available = common.path_exists(report_path)
+  local files = {}
+  if coverage_available then
+    local content = common.read_file(report_path)
+    if content then
+      files = _remap_paths(coverage.parse_luacov_report(content), project_root)
+    else
+      coverage_available = false
+    end
+  else
+    io.stderr:write("warning: luacov report not found at " .. report_path
+      .. " — coverage unavailable, CRAP scores will be N/A\n")
+  end
 
   return {
-    line_hits = line_hits,
+    files = files,
     lanes = lane_results,
+    coverage_available = coverage_available,
+    report_path = report_path,
   }
 end
 

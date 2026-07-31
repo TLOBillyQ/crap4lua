@@ -85,6 +85,8 @@ local function _collect_from_loaded_config(loaded, opts)
     lanes = lanes,
     mode = mode,
     adapter = coverage_cfg.adapter,
+    report_path = coverage_cfg.report
+      and common.resolve_path(project_root, coverage_cfg.report) or nil,
   })
 
   return {

@@ -16,7 +16,8 @@ local function _test_bridge_collect_builds_runtime_payload_from_config()
   helpers.assert_eq(result.project_name, "Fixture App", "bridge should expose config project name")
   helpers.assert_eq(result.source_roots[1], "src", "bridge should expose source roots")
   helpers.assert_eq(result.coverage_result.lanes[1].lane, "unit", "bridge should preserve configured lanes")
-  assert(result.coverage_result.line_hits["src/sample.lua"] ~= nil, "bridge should capture line hits for tracked sources")
+  helpers.assert_eq(result.coverage_result.coverage_available, true, "bridge should have parsed the fixture luacov report")
+  assert(result.coverage_result.files["src/sample.lua"] ~= nil, "bridge should capture luacov hits for tracked sources")
 end
 
 local function _test_bridge_write_collect_json_writes_json_file()

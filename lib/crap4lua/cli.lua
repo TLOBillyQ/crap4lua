@@ -10,7 +10,9 @@ local function _help_text(command_name)
     "  lua " .. command_name .. " report [--lane NAME] [--out FILE] [--top N] [--strict-tests] [--project-root DIR]",
     "  lua " .. command_name .. " collect [--lane NAME] --out FILE [--project-root DIR]",
     "  lua " .. command_name .. " dry-run [--lane NAME] [--config FILE]",
-    "  lua " .. command_name .. " summary [--in-json FILE] [--tier-config FILE] [--lane NAME] [--out FILE] [--top N] [--gate]",
+    "  lua " .. command_name .. " summary [--in-json FILE] [--tier-config FILE] [--lane NAME] [--out FILE] [--top N] [--gate] [--gate-threshold N]",
+    "",
+    "--gate exits 2 when any tier fails or max CRAP exceeds --gate-threshold (default 5.0).",
   }, "\n") .. "\n"
 end
 
@@ -65,6 +67,7 @@ local _FLAG_HANDLERS = {
   ["--top"] = { value = true, set = function(o, v) o.top = common.to_integer(v) end },
   ["--strict-tests"] = { set = function(o) o.strict_tests = true end },
   ["--gate"] = { set = function(o) o.gate = true end },
+  ["--gate-threshold"] = { value = true, set = function(o, v) o.gate_threshold = tonumber(v) end },
   ["--open"] = { set = function(o) o.open = true end },
 }
 
@@ -73,7 +76,7 @@ local function _parse_args(args)
     command = nil, config = nil, out = nil, out_dir = nil,
     in_json = nil, project_root = nil, tier_config = nil,
     lanes = {}, runner = nil, top = nil,
-    strict_tests = false, gate = false, open = false, help = false,
+    strict_tests = false, gate = false, gate_threshold = nil, open = false, help = false,
     lane = nil,
   }
 
@@ -151,6 +154,7 @@ local function _resolve_collect_lanes(raw_coverage, cli_lanes)
   if _is_array_table(cli_lanes) then return _copy_array(cli_lanes) end
   local lanes_cfg = raw_coverage and raw_coverage.lanes or nil
   if type(lanes_cfg) == "table" then
+    if _is_array_table(lanes_cfg) then return { lanes_cfg[1] } end
     if lanes_cfg.default then return { "default" } end
     local keys = common.sorted_keys(lanes_cfg)
     if #keys > 0 then return { keys[1] } end
@@ -186,6 +190,8 @@ local function _collect_coverage(options, env)
     lanes = lanes,
     mode = raw_coverage.mode,
     adapter = adapter,
+    report_path = raw_coverage.report
+      and common.resolve_path(project_root, raw_coverage.report) or nil,
   })
 
   return {
@@ -206,7 +212,6 @@ local function _build_report(options, env)
     source_roots = collected.source_roots,
     coverage_result = collected.coverage_result,
     top = options.top or env.default_top or 20,
-    luac_cmd = env.luac_cmd,
   })
 end
 
@@ -513,7 +518,21 @@ function cli.run(args, env)
       end
     end
 
-    if options.gate and not all_pass then return 1 end
+    if options.gate then
+      -- crap4java's gate ported faithfully: trip when max CRAP exceeds the
+      -- threshold (default 5.0, configurable — java hardcodes 8.0), or when
+      -- any coverage tier fails. Gate trips exit 2.
+      local threshold = options.gate_threshold or env.default_gate_threshold or 5.0
+      local max_crap = report.summary and report.summary.max_crap or 0
+      if not all_pass then
+        stderr:write("gate: coverage tier failed\n")
+        return 2
+      end
+      if max_crap > threshold then
+        stderr:write(string.format("gate: max CRAP %.2f exceeds threshold %.2f\n", max_crap, threshold))
+        return 2
+      end
+    end
     return 0
   end
 

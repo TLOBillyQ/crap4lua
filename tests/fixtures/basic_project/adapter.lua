@@ -36,13 +36,7 @@ local function run_all(suites, opts)
   for _, suite in ipairs(suites or {}) do
     for _, test in ipairs(suite.tests or {}) do
       total = total + 1
-      if type(opts.before_case) == "function" then
-        opts.before_case({ full_name = suite.name .. "." .. test.name })
-      end
       local ok, err = xpcall(test.run, debug.traceback)
-      if type(opts.after_case) == "function" then
-        opts.after_case({ full_name = suite.name .. "." .. test.name }, ok, err, { lines = {} })
-      end
       if not ok then
         failures[#failures + 1] = {
           name = suite.name .. "." .. test.name,
@@ -50,6 +44,42 @@ local function run_all(suites, opts)
         }
       end
     end
+  end
+
+  -- The fixture stands in for a luacov-instrumented run: it emits the
+  -- standard report artifact the way `luacov`'s default reporter would.
+  -- Both alpha branches, beta's loop, and run are exercised by the suites.
+  if opts.report_path then
+    local lines = {
+      "==============================================================================",
+      "src/sample.lua",
+      "==============================================================================",
+      "      2 local sample = {}",
+      "        ",
+      "      2 local function alpha(flag)",
+      "      2   if flag then",
+      "      1     return 1",
+      "          end",
+      "      1   return 0",
+      "        end",
+      "        ",
+      "      2 function sample.beta(n)",
+      "      2   local total = 0",
+      "      2   for i = 1, n do",
+      "      4     total = total + i",
+      "          end",
+      "      2   return total",
+      "        end",
+      "        ",
+      "      2 function sample.run(flag)",
+      "      2   return alpha(flag) + sample.beta(2)",
+      "        end",
+      "        ",
+      "      1 return sample",
+    }
+    local file = assert(io.open(opts.report_path, "w"))
+    file:write(table.concat(lines, "\n") .. "\n")
+    file:close()
   end
 
   return {
@@ -83,5 +113,4 @@ return {
     }, mode or "fixture"
   end,
   run = run_all,
-  debug_api = debug,
 }

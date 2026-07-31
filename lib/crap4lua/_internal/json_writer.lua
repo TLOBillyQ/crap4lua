@@ -2,6 +2,13 @@ local common = require("crap4lua._internal.common")
 
 local json_writer = {}
 
+-- Explicit JSON null sentinel: table fields holding this value encode as
+-- `null` instead of vanishing (Lua tables cannot hold nil fields). Used for
+-- N/A CRAP scores — missing coverage must never serialize as 0.
+json_writer.null = setmetatable({}, {
+  __tostring = function() return "json.null" end,
+})
+
 local function _escape_string(value)
   local escaped = tostring(value or "")
   escaped = escaped:gsub("\\", "\\\\")
@@ -34,7 +41,7 @@ end
 
 local function _encode(value)
   local value_type = type(value)
-  if value == nil then
+  if value == nil or value == json_writer.null then
     return "null"
   end
   if value_type == "string" then

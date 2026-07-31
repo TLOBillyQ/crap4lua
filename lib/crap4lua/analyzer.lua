@@ -1,143 +1,8 @@
+local ast = require("crap4lua.ast")
 local common = require("crap4lua._internal.common")
+local json_writer = require("crap4lua._internal.json_writer")
 
 local analyzer = {}
-
-local DECISION_OPCODES = {
-  EQ = true, LT = true, LE = true,
-  TEST = true, TESTSET = true,
-  FORLOOP = true, FORPREP = true, TFORLOOP = true,
-  EQK = true, EQI = true,
-  LTI = true, LEI = true,
-  GTI = true, GEI = true,
-}
-
-function analyzer.parse_luac_output(text)
-  local functions = {}
-  local current = nil
-
-  for line in (text .. "\n"):gmatch("(.-)\n") do
-    local kind, file, start_line, end_line = line:match("^(%S+)%s+<(.+):(%d+),(%d+)>")
-    if kind == "main" or kind == "function" then
-      if current then
-        functions[#functions + 1] = current
-      end
-      current = {
-        name = kind == "main" and "(main)" or nil,
-        source_path = file,
-        start_line = tonumber(start_line),
-        end_line = tonumber(end_line),
-        executable_lines = {},
-        decision_lines = {},
-      }
-    elseif current then
-      local line_no, opcode = line:match("%[(%d+)%]%s+(%S+)")
-      if line_no and opcode then
-        local n = tonumber(line_no)
-        current.executable_lines[n] = true
-        if DECISION_OPCODES[opcode] then
-          current.decision_lines[n] = true
-        end
-      end
-    end
-  end
-
-  if current then
-    functions[#functions + 1] = current
-  end
-  return functions
-end
-
-local function _count_keys(t)
-  local n = 0
-  for _ in pairs(t) do n = n + 1 end
-  return n
-end
-
-local function _run_luac(abs_path, luac_cmd)
-  luac_cmd = luac_cmd or "luac"
-  local command = luac_cmd .. " -p -l " .. common.shell_quote(abs_path) .. " 2>&1"
-  local handle = io.popen(command)
-  if handle == nil then
-    return nil, "failed to run luac"
-  end
-  local output = handle:read("*a")
-  handle:close()
-  return (output or ""):gsub("^%s+", "")
-end
-
-function analyzer.analyze_file(abs_path, opts)
-  opts = opts or {}
-  local output, err = _run_luac(abs_path, opts.luac_cmd)
-  if output == nil then
-    return nil, err
-  end
-  if not output:match("^%S+%s+<") then
-    return nil, output:match("^[^\n]*") or "luac failed"
-  end
-  return analyzer.parse_luac_output(output)
-end
-
--- Number of files passed to a single luac invocation. Keeps argv well
--- below OS limits while still amortizing process startup over many files.
-local LUAC_BATCH_SIZE = 100
-
--- Analyze many files with far fewer luac subprocesses than one per file.
--- Returns parsed_map (abs_path -> functions array) and errors
--- (abs_path -> message). Files that a batch run could not produce output
--- for (e.g. syntax errors aborting the batch) are retried individually so
--- error messages match analyze_file exactly.
-function analyzer.analyze_files(abs_paths, opts)
-  opts = opts or {}
-  local luac_cmd = opts.luac_cmd or "luac"
-  local parsed_map = {}
-  local errors = {}
-
-  local index = 1
-  while index <= #abs_paths do
-    local chunk = {}
-    local chunk_end = math.min(index + LUAC_BATCH_SIZE - 1, #abs_paths)
-    for j = index, chunk_end do
-      chunk[#chunk + 1] = abs_paths[j]
-    end
-    index = chunk_end + 1
-
-    local command = luac_cmd .. " -p -l"
-    for _, path in ipairs(chunk) do
-      command = command .. " " .. common.shell_quote(path)
-    end
-    command = command .. " 2>&1"
-
-    local grouped = {}
-    local handle = io.popen(command)
-    if handle then
-      local output = handle:read("*a") or ""
-      handle:close()
-      for _, fn in ipairs(analyzer.parse_luac_output(output)) do
-        local bucket = grouped[fn.source_path]
-        if bucket == nil then
-          bucket = {}
-          grouped[fn.source_path] = bucket
-        end
-        bucket[#bucket + 1] = fn
-      end
-    end
-
-    for _, path in ipairs(chunk) do
-      if grouped[path] then
-        parsed_map[path] = grouped[path]
-      else
-        local parsed, err = analyzer.analyze_file(path, opts)
-        if parsed then
-          parsed_map[path] = parsed
-        else
-          errors[path] = err
-        end
-      end
-    end
-  end
-
-  return parsed_map, errors
-end
 
 local function _relative_source_path(abs_path, project_root)
   local prefix = common.normalize_path(project_root):gsub("/+$", "") .. "/"
@@ -156,14 +21,33 @@ local function _compute_crap(complexity, coverage_ratio)
   return complexity * complexity * (1 - coverage_ratio) ^ 3 + complexity
 end
 
+-- Upstream risk bands: 1-5 low / 5-30 moderate / 30+ high.
 local function _risk_band(crap_score)
-  if crap_score >= 30 then return "critical" end
-  if crap_score >= 8 then return "warning" end
+  if crap_score == nil then return "n/a" end
+  if crap_score >= 30 then return "high" end
+  if crap_score >= 5 then return "moderate" end
   return "low"
 end
 
+-- Count executable / hit lines of a luacov file entry inside [start, finish].
+local function _coverage_in_range(file_entry, start_line, finish_line)
+  if file_entry == nil then
+    return 0, 0
+  end
+  local exec, hit = 0, 0
+  for line_no in pairs(file_entry.exec) do
+    if line_no >= start_line and line_no <= finish_line then
+      exec = exec + 1
+      if file_entry.hit[line_no] then
+        hit = hit + 1
+      end
+    end
+  end
+  return exec, hit
+end
+
 local function _format_coverage(hit, exec)
-  if exec == 0 then return "100%" end
+  if exec == 0 then return "N/A" end
   return string.format("%.0f%%", hit / exec * 100)
 end
 
@@ -172,13 +56,9 @@ function analyzer.build_report(opts)
   local project_root = common.normalize_path(opts.project_root or ".")
   local source_roots = opts.source_roots or {}
   local coverage_result = opts.coverage_result or {}
-  local line_hits = coverage_result.line_hits or {}
+  local coverage_files = coverage_result.files or {}
+  local coverage_available = coverage_result.coverage_available == true
   local top = opts.top or 20
-  local luac_cmd = opts.luac_cmd
-
-  if not common.command_exists(luac_cmd or "luac") then
-    return nil, "luac command not found. Install Lua to get luac."
-  end
 
   local all_files = {}
   for _, root in ipairs(source_roots) do
@@ -199,52 +79,46 @@ function analyzer.build_report(opts)
   local module_map = {}
   local func_id = 0
 
-  local parsed_map, parse_errors = analyzer.analyze_files(all_files, { luac_cmd = luac_cmd })
-
   for _, abs_path in ipairs(all_files) do
     local rel_path = _relative_source_path(abs_path, project_root)
-    local file_hits = line_hits[rel_path] or {}
-    local parsed = parsed_map[abs_path]
+    local parsed, parse_err = ast.analyze_file(abs_path)
     if parsed == nil then
-      io.stderr:write("skip " .. rel_path .. ": " .. tostring(parse_errors[abs_path]) .. "\n")
+      io.stderr:write("skip " .. rel_path .. ": " .. tostring(parse_err) .. "\n")
       goto continue_file
     end
 
+    local file_entry = coverage_files[rel_path]
     local mod_exec = 0
     local mod_hit = 0
     local mod_max_crap = 0
     local mod_func_count = 0
 
     for _, fn in ipairs(parsed) do
-      local exec_count = _count_keys(fn.executable_lines)
-      local hit_count = 0
-      for line_no in pairs(fn.executable_lines) do
-        if file_hits[line_no] then
-          hit_count = hit_count + 1
-        end
+      local exec_count, hit_count = _coverage_in_range(file_entry, fn.start_line, fn.end_line)
+
+      -- N/A discipline: without coverage data the score is null (never 0),
+      -- displayed as N/A and sorted last. A function whose file has no
+      -- executable lines recorded is equally unmeasurable.
+      local measurable = coverage_available and exec_count > 0
+      local coverage_ratio = measurable and (hit_count / exec_count) or nil
+      local crap_score = nil
+      if measurable then
+        crap_score = _compute_crap(fn.complexity, coverage_ratio)
+        crap_score = math.floor(crap_score * 100 + 0.5) / 100
       end
 
-      local decision_count = _count_keys(fn.decision_lines)
-      local complexity = 1 + decision_count
-      local coverage_ratio = exec_count > 0 and (hit_count / exec_count) or 1
-      local crap_score = _compute_crap(complexity, coverage_ratio)
-      crap_score = math.floor(crap_score * 100 + 0.5) / 100
-
       func_id = func_id + 1
-      local name = fn.name or ("function:" .. fn.start_line)
-
       functions[#functions + 1] = {
         id = func_id,
-        name = name,
+        name = fn.name,
         source_path = rel_path,
         source_name = _source_name(rel_path),
         start_line = fn.start_line,
         end_line = fn.end_line,
-        crap = crap_score,
-        crap_score = crap_score,
-        complexity = complexity,
-        coverage = _format_coverage(hit_count, exec_count),
-        decision_line_count = decision_count,
+        crap = crap_score or json_writer.null,
+        crap_score = crap_score or json_writer.null,
+        complexity = fn.complexity,
+        coverage = measurable and _format_coverage(hit_count, exec_count) or "N/A",
         executable_line_count = exec_count,
         hit_line_count = hit_count,
         risk_band = _risk_band(crap_score),
@@ -252,7 +126,7 @@ function analyzer.build_report(opts)
 
       mod_exec = mod_exec + exec_count
       mod_hit = mod_hit + hit_count
-      if crap_score > mod_max_crap then
+      if crap_score and crap_score > mod_max_crap then
         mod_max_crap = crap_score
       end
       mod_func_count = mod_func_count + 1
@@ -272,8 +146,12 @@ function analyzer.build_report(opts)
     ::continue_file::
   end
 
+  -- CRAP descending, N/A sunk to the bottom; ties by complexity then name.
   table.sort(functions, function(a, b)
-    if a.crap ~= b.crap then return a.crap > b.crap end
+    local a_null = a.crap == json_writer.null
+    local b_null = b.crap == json_writer.null
+    if a_null ~= b_null then return b_null end
+    if not a_null and a.crap ~= b.crap then return a.crap > b.crap end
     if a.complexity ~= b.complexity then return a.complexity > b.complexity end
     return a.name < b.name
   end)
@@ -294,17 +172,24 @@ function analyzer.build_report(opts)
   local total_hit = 0
   local max_crap = 0
   local sum_crap = 0
-  local critical_count = 0
-  local warning_count = 0
+  local scored_count = 0
+  local high_count = 0
+  local moderate_count = 0
+  local na_count = 0
   for _, fn in ipairs(functions) do
     total_exec = total_exec + fn.executable_line_count
     total_hit = total_hit + fn.hit_line_count
-    sum_crap = sum_crap + fn.crap
-    if fn.crap > max_crap then max_crap = fn.crap end
-    if fn.risk_band == "critical" then
-      critical_count = critical_count + 1
-    elseif fn.risk_band == "warning" then
-      warning_count = warning_count + 1
+    if fn.crap == json_writer.null then
+      na_count = na_count + 1
+    else
+      scored_count = scored_count + 1
+      sum_crap = sum_crap + fn.crap
+      if fn.crap > max_crap then max_crap = fn.crap end
+      if fn.risk_band == "high" then
+        high_count = high_count + 1
+      elseif fn.risk_band == "moderate" then
+        moderate_count = moderate_count + 1
+      end
     end
   end
 
@@ -315,13 +200,15 @@ function analyzer.build_report(opts)
       generated_at = os.date("%Y-%m-%dT%H:%M:%S"),
     },
     lanes = coverage_result.lanes or {},
+    coverage_available = coverage_available,
     summary = {
       function_count = #functions,
       module_count = #modules,
-      avg_crap = #functions > 0 and (math.floor(sum_crap / #functions * 100 + 0.5) / 100) or 0,
+      avg_crap = scored_count > 0 and (math.floor(sum_crap / scored_count * 100 + 0.5) / 100) or 0,
       max_crap = max_crap,
-      critical_count = critical_count,
-      warning_count = warning_count,
+      high_count = high_count,
+      moderate_count = moderate_count,
+      na_count = na_count,
     },
     functions = functions,
     modules = modules,

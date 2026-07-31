@@ -116,6 +116,7 @@ function config.load(path, env)
       lanes = lanes,
       mode = coverage.mode,
       collect = coverage.collect,
+      report = coverage.report,
     },
   }
 end
