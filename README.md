@@ -5,7 +5,7 @@
 从宿主测试运行产出的标准 `luacov.report.out` 中读取行覆盖率，
 并生成 JSON 报告。
 
-库模块位于 `lib/crap4lua/` 下，自包含：不硬编码任何宿主专属路径或默认值。
+库模块位于 `src/` 下，自包含：不硬编码任何宿主专属路径或默认值。
 宿主通过配置文件和一个薄入口脚本接入自己的 adapter 和默认值。
 
 ## CLI
@@ -188,7 +188,7 @@ return {
 4. 在 eggy 仓库根目录添加薄入口脚本 `crap.lua`：
 
    ```lua
-   package.path = "vendor/crap4lua/lib/?.lua;" .. package.path
+   package.path = "vendor/crap4lua/src/?.lua;" .. package.path
    os.exit(require("crap4lua.cli").run(arg, {
      command_name = "crap.lua",
      default_config = "crap4lua.config.lua",

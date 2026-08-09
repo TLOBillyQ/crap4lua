@@ -7,6 +7,7 @@ LUACHECK_DIR ?= /opt/homebrew/Cellar/luacheck/1.2.0_1/libexec/share/lua/5.4
 # luaunit is a test-only dependency (LuaRocks). Point LUAROCKS_DIR at the
 # Lua 5.4 module tree where it is installed.
 LUAROCKS_DIR ?= $(HOME)/.luarocks/share/lua/5.4
+SRC_DIR ?= $(CURDIR)/src
 
 test:
-	LUA_PATH="$(LUACHECK_DIR)/?.lua;$(LUACHECK_DIR)/?/init.lua;$(LUAROCKS_DIR)/?.lua;$(LUAROCKS_DIR)/?/init.lua;;" $(LUA) tests/run.lua
+	LUA_PATH="$(SRC_DIR)/?.lua;$(SRC_DIR)/?/init.lua;$(LUACHECK_DIR)/?.lua;$(LUACHECK_DIR)/?/init.lua;$(LUAROCKS_DIR)/?.lua;$(LUAROCKS_DIR)/?/init.lua;;" $(LUA) tests/run.lua

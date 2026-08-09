@@ -78,8 +78,8 @@ function M.install_package_paths()
   end
   _append_path(M.project_root .. "/?.lua")
   _append_path(M.project_root .. "/?/init.lua")
-  _append_path(M.project_root .. "/lib/?.lua")
-  _append_path(M.project_root .. "/lib/?/init.lua")
+  _append_path(M.project_root .. "/src/?.lua")
+  _append_path(M.project_root .. "/src/?/init.lua")
   _installed = true
 end
 

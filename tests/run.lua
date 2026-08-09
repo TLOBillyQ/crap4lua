@@ -23,8 +23,8 @@ local project_root = test_root:match("^(.*)/[^/]+$") or "."
 package.path = table.concat({
   project_root .. "/?.lua",
   project_root .. "/?/init.lua",
-  project_root .. "/lib/?.lua",
-  project_root .. "/lib/?/init.lua",
+  project_root .. "/src/?.lua",
+  project_root .. "/src/?/init.lua",
   package.path,
 }, ";")
 
