@@ -2,7 +2,7 @@ rockspec_format = "3.0"
 package = "crap4lua"
 version = "0.1.1-1"
 source = {
-   url = "git+http://lzxsvn:3000/qinyuanj/crap4lua.git",
+   url = "git+http://lzxsvn:3000/eggy/crap4lua.git",
    tag = "v0.1.1",
 }
 description = {
@@ -13,7 +13,7 @@ description = {
       JSON reports. It is the Lua port of unclebob's crap4clj / crap4go /
       crap4java tools.
    ]],
-   homepage = "http://lzxsvn:3000/qinyuanj/crap4lua",
+   homepage = "http://lzxsvn:3000/eggy/crap4lua",
    license = "MIT",
 }
 dependencies = {

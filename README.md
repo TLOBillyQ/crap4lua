@@ -1,5 +1,7 @@
 # crap4lua
 
+> 「4lua 系列」：[acceptance4lua](http://lzxsvn:3000/eggy/acceptance4lua) · [crap4lua](http://lzxsvn:3000/eggy/crap4lua) · [dry4lua](http://lzxsvn:3000/eggy/dry4lua) · [mutate4lua](http://lzxsvn:3000/eggy/mutate4lua)
+
 `crap4lua` 是纯 Lua 的 CRAP（Change Risk Anti-Patterns，变更风险反模式）热点分析工具，
 面向 Lua 代码。它通过 luacheck 的真实 Lua AST 计算圈复杂度，
 从宿主测试运行产出的标准 `luacov.report.out` 中读取行覆盖率，
